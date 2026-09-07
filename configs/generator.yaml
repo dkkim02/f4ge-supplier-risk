@@ -16,7 +16,11 @@ order:
   qty_lognormal_sigma: 0.9
   qty_min: 200
   qty_max: 5000
-  lead_time_weeks: [3, 8]
+  # 납기는 여유율에서 유도한다(orders.py 주석 참조). lead_time_weeks 는
+  # 결과가 상식 범위에 있는지 보는 검증용 범위이지 입력이 아니다.
+  lead_slack_mean: 0.20
+  lead_slack_sd: 0.30
+  lead_time_weeks_sanity: [2.5, 10]
   market_mix: { us_west: 0.4, us_east: 0.3, eu: 0.3 }
 
 market_transit_days:            # 라벨 지연을 정한다
@@ -33,7 +37,7 @@ aql:
 quality:
   internal_defect_rate_median: 0.030   # 3~4시그마 실태
   escape_formula: "internal * (1 - detection_rate)"
-  detection_rate_range: [0.70, 0.99]
+  detection_rate_range: [0.88, 0.998]   # escape 목표에서 역산
 
 # ⚠ 실측 근거 없음 — 민감도 분석 필수
 assumptions:
@@ -45,6 +49,9 @@ assumptions:
   bias_sensitivity: 0.5                # 나쁠수록 더 축소 보고 — 핵심 상품
   report_discipline_range: [0.3, 0.95]
   t2_compliance_range: [0.0, 0.9]
+  # 유출 불량의 심각도 구성. **실측 근거 없음** — 다만 로트 불합격률을
+  # 실무 범위(1~10%)로 만드는 것은 critical 비중이지 major AQL 이 아니다.
+  defect_severity_mix: { critical: 0.25, major: 0.50, minor: 0.25 }
 
 telemetry:
   installed_factories: []              # 지금은 0곳. 스키마만 유지
