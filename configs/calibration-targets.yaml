@@ -1,0 +1,90 @@
+# 실측 캘리브레이션 타깃
+#
+# 규칙: 값을 고치려면 근거(source)부터 바꿔야 한다. "모델이 잘 나오게" 조정 금지.
+# 근거 전문은 docs/생성기_캘리브레이션.md
+#
+#   target/tol  — |generated - target| / target <= tol
+#   min/max     — 범위
+#
+# ⚠ 가장 중요한 것: 불량률이 두 종류다.
+#   internal_defect_rate (공정 발생, 0.6~6.7%)  ≠  escape_rate (고객 도달, 0.05~0.5%)
+#   기존 f4ge-quality-prediction 의 defect_rate 0.05~0.25 는 전자다. 우리 y 는 후자다.
+
+targets:
+  # ── 오더 구조 ──────────────────────────────────────────
+  order_qty_median:
+    target: 800
+    tol: 0.50
+    source: cnc_market
+    note: "CNC 서비스 수요의 49%가 5,000개 미만 배치. 지역 평균 2,000~8,000."
+
+  order_qty_lognormal_sigma:
+    min: 0.6
+    max: 1.2
+    source: assumption
+    note: "로트 크기가 AQL 표본 크기를 정하므로 꼬리가 y 노이즈를 좌우한다."
+
+  # ── 품질 2층 ───────────────────────────────────────────
+  internal_defect_rate_median:
+    target: 0.030
+    tol: 0.50
+    source: six_sigma_industry + bosch + msm + secom
+    note: >
+      미국 제조 대다수 3~4시그마 = DPMO 6,210~66,807. Lean 후 3.18% / 전 8~12%.
+      우리가 가진 현장 데이터와도 겹친다 — Bosch 0.067 · MSM 0.025 · SECOM 0.066.
+
+  escape_rate_median:
+    target: 0.0010
+    tol: 0.60
+    source: ppm_benchmark
+    note: >
+      **내부 불량률과 다른 값이다.** 오늘날 고객 기대 1,000 PPM, 많은 곳 500 이하,
+      세계 평균 기대 75 PPM. 부실 공급사 실사례 4.2%.
+      **기존 프로젝트 defect_rate 0.05~0.25 를 가져오면 100배 틀린다.**
+
+  escape_rate_max:
+    max: 0.05
+    source: ppm_benchmark
+    note: "escape 4.2% 사례가 90일 만에 0.3% 로 개선된 기록이 상한 근거."
+
+  lot_reject_rate:
+    min: 0.01
+    max: 0.10
+    source: incoming_inspection_cases
+    note: "로트 불합격률 10%↑ → 1.5% 개선 사례. 이진 타깃의 기저율."
+
+  scrap_share_of_internal:
+    min: 0.03
+    max: 0.20
+    source: hidden_factory
+    note: "scrap 0.5% / FPY 82% → 17.5% 재작업. 대부분은 재작업으로 흡수된다."
+
+  # ── AQL ────────────────────────────────────────────────
+  aql_major: { target: 0.025, tol: 0.0, source: iso2859 }
+  aql_minor: { target: 0.040, tol: 0.0, source: iso2859 }
+  sample_size_lot_3201_10000:
+    target: 200
+    tol: 0.0
+    source: iso2859
+    note: "코드 L, Level II. 합격 major ≤10 / 불합격 ≥11."
+
+  # ── 라벨 지연 ──────────────────────────────────────────
+  transit_days_us_west:  { target: 18, tol: 0.30, source: freight }
+  transit_days_us_east:  { target: 30, tol: 0.30, source: freight }
+  transit_days_europe:   { target: 60, tol: 0.20, source: freight }
+    # ⚠ 유럽 57~63일. "2~6주" 가정은 유럽에 대해 틀렸다.
+
+  # ── 보고 ───────────────────────────────────────────────
+  report_interval_days:
+    target: 7
+    tol: 0.0
+    source: sourcing_practice
+    note: "소싱 에이전트 표준 실무 = 생산 중 주 1회 공급사 문서 수집."
+
+# ── ⚠ 실측 근거 없음. 민감도 분석 대상 ────────────────────
+assumptions:
+  factory_capability_sd: 1.0      # log escape. 상하위 약 10배 격차
+  product_difficulty_sd: 0.5
+  within_factory_ar1: 0.3
+  report_bias_mean: 0.5           # 실제의 절반으로 보고
+  report_bias_worsens_with_trouble: true   # 모델의 핵심 상품이 여기 달려 있다

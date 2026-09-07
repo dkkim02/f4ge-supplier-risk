@@ -1,0 +1,50 @@
+# 생성기 파라미터
+# 근거: docs/생성기_캘리브레이션.md · 구조: docs/생성_데이터_명세.md
+# ⚠ assumptions 블록은 실측 근거가 없다. 민감도 분석 대상.
+
+seed: 20260907
+
+scale:
+  factories: 12            # 제품군 4종 x 3곳
+  products: 4
+  months: 36               # 현실 규모(18개월/450건)로는 평가 불가 — 명세 §6
+  orders_per_month: 25
+  report_interval_days: 7  # 소싱 에이전트 표준 실무
+
+order:
+  qty_lognormal_median: 800     # CNC 수요의 49%가 5,000개 미만 배치
+  qty_lognormal_sigma: 0.9
+  qty_min: 200
+  qty_max: 5000
+  lead_time_weeks: [3, 8]
+  market_mix: { us_west: 0.4, us_east: 0.3, eu: 0.3 }
+
+market_transit_days:            # 라벨 지연을 정한다
+  us_west: 18
+  us_east: 30
+  eu: 60                        # ⚠ 유럽은 두 달. "2~6주"가 아니다
+
+aql:
+  major: 0.025
+  minor: 0.040
+  critical: 0.0
+  inspection_level: "II"        # ISO 2859-1 표본 크기 표
+
+quality:
+  internal_defect_rate_median: 0.030   # 3~4시그마 실태
+  escape_formula: "internal * (1 - detection_rate)"
+  detection_rate_range: [0.70, 0.99]
+
+# ⚠ 실측 근거 없음 — 민감도 분석 필수
+assumptions:
+  factory_capability_sd: 1.0           # log escape. 상하위 약 10배 격차
+  product_difficulty_sd: 0.5
+  within_factory_ar1: 0.3
+  report_bias_mean: 0.5                # 실제 불량률의 절반으로 보고
+  report_bias_sd: 0.25
+  bias_sensitivity: 0.5                # 나쁠수록 더 축소 보고 — 핵심 상품
+  report_discipline_range: [0.3, 0.95]
+  t2_compliance_range: [0.0, 0.9]
+
+telemetry:
+  installed_factories: []              # 지금은 0곳. 스키마만 유지
