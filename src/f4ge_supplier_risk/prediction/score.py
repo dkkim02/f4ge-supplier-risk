@@ -31,7 +31,9 @@ import numpy as np
 import pandas as pd
 
 # 위험 등급 — 계약의 4-tier 를 승계한다.
-_RISK_Q = (0.50, 0.80, 0.95)
+# `high` 컷을 검사 강화 임계(_RISK_TIGHTEN_Q)와 **같은 선에 맞춘다.**
+# 어긋나 있으면 화면에 "위험 높음인데 권고 없음" 행이 생겨 자기모순으로 읽힌다.
+_RISK_Q = (0.60, 0.90, 0.97)
 _RISK_NAMES = ("low", "medium", "high", "critical")
 
 # 개입 임계.
