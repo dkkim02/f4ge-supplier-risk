@@ -20,6 +20,10 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--out", default="datasets/generated")
     g.add_argument("--seed", type=int, default=None)
 
+    sc = sub.add_parser("score", help="채점 — supplier-risk-score.v1 출력")
+    sc.add_argument("--config", default="configs/generator.yaml")
+    sc.add_argument("--out", default="datasets/generated/scores.jsonl")
+
     c = sub.add_parser("calibrate", help="검증 게이트")
     c.add_argument("--config", default="configs/generator.yaml")
     c.add_argument("--targets", default="configs/calibration-targets.yaml")
@@ -34,6 +38,21 @@ def main(argv: list[str] | None = None) -> int:
         counts = generate(cfg, Path(config.REPO_ROOT) / args.out)
         for k, v in counts.items():
             print(f"  {k:20s} {v:>7,}")
+        print(f"→ {args.out}")
+        return 0
+
+    if args.cmd == "score":
+        from f4ge_supplier_risk.prediction.run import score_all, write_scores
+
+        scored, trust, metrics = score_all(config.load(args.config))
+        n = write_scores(scored, Path(config.REPO_ROOT) / args.out)
+        print(
+            f"  채점 {n:,}건  ·  순위상관 {metrics['rank_corr_true']:+.3f}"
+            f"  ·  예상 중앙 {metrics['pred_ppm_median']:.0f} PPM"
+        )
+        for a, k in scored["recommended_action"].value_counts().items():
+            print(f"    {a:20s} {k:>4}건")
+        print(f"  신뢰도 하위 공장: {', '.join(trust.head(3).index)}")
         print(f"→ {args.out}")
         return 0
 
