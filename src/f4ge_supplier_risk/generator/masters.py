@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -66,15 +67,32 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
         disc_lo, disc_hi = a["report_discipline_range"]
         t2_lo, t2_hi = a["t2_compliance_range"]
 
+        capability = float(rng.normal(0.0, a["factory_capability_sd"]))
+        capability_z = capability / max(a["factory_capability_sd"], 1e-9)
+
         out.append(
             {
                 "factory_id": fid,
                 "product_id": product["product_id"],
-                # 잠재값 — 모델은 이 파일을 보지 못한다
-                "capability": float(rng.normal(0.0, a["factory_capability_sd"])),
+                # 잠재값 — 모델은 이 파일을 보지 못한다.
+                # 값이 클수록 나쁜 공장이다(logit 에 양수로 들어간다).
+                "capability": capability,
                 "detection_rate": detection,
+                # 나쁜 공장이 더 숨기는가? 지금 기본값은 **독립**(0.0)이다.
+                # 현실에서 상관이 있다면 불일치 탐지가 나쁜 오더까지 함께 잡는다 —
+                # 우리가 관측으로 확인할 수 없는 성질이라 CTO 확인 항목으로 올려 뒀다.
                 "report_bias": float(
-                    np.clip(rng.normal(a["report_bias_mean"], a["report_bias_sd"]), 0.15, 1.0)
+                    np.clip(
+                        a["report_bias_mean"]
+                        + a["report_bias_sd"]
+                        * (
+                            a["bias_capability_corr"] * capability_z
+                            + math.sqrt(max(1.0 - a["bias_capability_corr"] ** 2, 0.0))
+                            * rng.normal()
+                        ),
+                        0.15,
+                        1.0,
+                    )
                 ),
                 "bias_sensitivity": float(rng.uniform(0.0, 2.0 * a["bias_sensitivity"])),
                 "report_discipline": float(rng.uniform(disc_lo, disc_hi)),

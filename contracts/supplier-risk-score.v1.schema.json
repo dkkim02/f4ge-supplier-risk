@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.f4ge.io/schemas/supplier-risk/supplier-risk-score.v1.schema.json",
+  "title": "Supplier Risk — Order Score (출력)",
+  "description": "[신규 정의] 오더 1건의 품질 리스크 점수. 값이 하나가 아니라 셋인 것이 이 계약의 요점이다 — 예측 품질 · 보고 품질 · 불일치도. 셋을 함께 봐야 대응이 갈린다: 나쁜데 나쁘다고 보고하면 공장이 정직한 것이고, 나쁜데 괜찮다고 보고하면 가장 위험하다. FactoryOS 의 quality-prediction.v1 은 score_type 이 quality_fail 고정이고 추가 필드를 금지해서 오더 단위 예측과 불일치도를 담을 수 없다 — 이 계약을 우리가 정의해도 되는지는 FactoryOS 담당자 확인 필요.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "order_id", "factory_id", "scored_at",
+    "predicted_escape_ppm", "risk_level", "discrepancy", "discrepancy_flag",
+    "recommended_action"
+  ],
+  "properties": {
+    "schema_version": { "const": "supplier_risk.score.v1" },
+    "order_id":   { "type": "string", "pattern": "^ord_[a-z0-9][a-z0-9_-]{1,63}$" },
+    "factory_id": { "type": "string", "pattern": "^fac_[a-z0-9][a-z0-9_-]{1,63}$" },
+    "scored_at":  { "type": "string", "format": "date-time", "description": "ISO-8601 UTC. epoch ms 금지." },
+
+    "predicted_escape_ppm": {
+      "type": "number", "minimum": 0,
+      "description": "예상 유출 불량률. **PPM 단위** — 구매·품질 담당자가 쓰는 문법이다. 세계 수준은 100 PPM 이하, 오늘날 고객 기대는 1,000 PPM 수준."
+    },
+    "risk_level": {
+      "type": "string", "enum": ["low", "medium", "high", "critical"],
+      "description": "4-tier. 임계값은 학습 구간 분포에서만 잡는다."
+    },
+    "reported_defect_rate": {
+      "type": ["number", "null"], "minimum": 0, "maximum": 1,
+      "description": "공장이 보고한 내부 불량률. 보고가 없으면 null — 0 이 아니다. 결측과 무결함은 다르다."
+    },
+    "discrepancy": {
+      "type": "number",
+      "description": "log(증거가 예상한 보고) − log(실제 보고). 양수면 증거보다 좋게 보고했다는 뜻이다. 정답값을 쓰지 않고 관측만으로 계산한다."
+    },
+    "discrepancy_flag": { "type": "boolean" },
+    "factory_trust_low": {
+      "type": "boolean",
+      "description": "이 공장의 보고 신뢰도가 하위 25% 인가. **한 오더의 불일치는 노이즈이고 공장 단위 누적이 신호다** — 실측 순위상관 오더 단위 −0.01(부호 일관 3/7) vs 공장 단위 +0.67(7/7). 현장 방문은 이 값이 참일 때만 건다."
+    },
+    "recommended_action": {
+      "type": "string",
+      "enum": ["none", "call", "tighten_inspection", "site_visit"],
+      "description": "tighten_inspection 은 입고검사 강화 또는 제3자 DUPRO(생산 30~50% 시점 현장 검사) 발주를 뜻한다 — 개입이면서 동시에 고품질 관측을 얻는 수단이다."
+    },
+    "action_reason": { "type": ["string", "null"] },
+    "model_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "tenant_id": { "type": "string", "pattern": "^ten_[a-z0-9][a-z0-9_-]{1,63}$" }
+  }
+}
