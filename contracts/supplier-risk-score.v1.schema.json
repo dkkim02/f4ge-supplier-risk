@@ -42,7 +42,24 @@
       "enum": ["none", "call", "tighten_inspection", "site_visit"],
       "description": "tighten_inspection 은 입고검사 강화 또는 제3자 DUPRO(생산 30~50% 시점 현장 검사) 발주를 뜻한다 — 개입이면서 동시에 고품질 관측을 얻는 수단이다."
     },
-    "action_reason": { "type": ["string", "null"] },
+    "action_reason": {
+      "type": ["string", "null"],
+      "description": "무엇이 어긋났는지 한 문장. **\"어긋났다\" 보다 \"무엇이 어긋났다\" 가 행동을 만든다** — 사유가 없으면 현장 방문이 탐색이 되고, 있으면 검증이 된다."
+    },
+    "action_check": {
+      "type": ["string", "null"],
+      "description": "가서 확인할 것. 사유별로 정해져 있다 — 수량이면 재공품 실사와 자재 입출고 대장, 사진이면 즉석 촬영 요청."
+    },
+    "reason_primary": {
+      "type": ["string", "null"],
+      "enum": ["qty_inflation", "defect_hiding", "optimistic_due", "silent_trouble", "stale_evidence", "no_evidence", null],
+      "description": "가장 크게 어긋난 교차검증 짝. 자기신고 항목과 물리적 증거를 짝지어 비교한 결과다. 각 사유는 생성기의 해당 메커니즘 정답값으로 검증했다 — 발동 시 그 메커니즘이 실제로 심하다(증거 재활용 15.4배 · 문제 은폐 2.4배 · 불량 은폐 2.1배 · 낙관 납기 2.0배 · 수량 부풀리기 1.2배). `no_evidence` 는 짝이 아니라 **대조할 증거가 하나도 없는 상태**다 — T2 를 안 낸 공장은 검증 수단이 없다는 뜻이고 그건 "괜찮다" 가 아니다."
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "어긋난 짝 전부. 여러 개가 동시에 발동할 수 있다."
+    },
     "model_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
     "tenant_id": { "type": "string", "pattern": "^ten_[a-z0-9][a-z0-9_-]{1,63}$" }
   }

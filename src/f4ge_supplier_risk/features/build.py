@@ -91,11 +91,61 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
         rep_rate = rep_defects / rep_produced
 
         # 교차검증 쌍: 보고 수량 vs 자재 소진. 수량을 부풀리면 여기가 어긋난다
+        # 마지막 회차만 보면 안 된다 — 부풀리기는 특정 회차에서 일어나고
+        # 다음 회차에 실제 생산이 따라붙으면 흔적이 지워진다. 최댓값을 쓴다.
         mat_gap = np.nan
         if t2:
-            r = t2[-1]
-            expected = r["material_consumed_qty"] / products[o["product_id"]]["material_per_unit"]
-            mat_gap = (r["produced_qty"] - expected) / max(expected, 1.0)
+            per_unit = products[o["product_id"]]["material_per_unit"]
+            gaps = [
+                (r["produced_qty"] - r["material_consumed_qty"] / per_unit)
+                / max(r["material_consumed_qty"] / per_unit, 1.0)
+                for r in t2
+                if r["material_consumed_qty"] > 0
+            ]
+            if gaps:
+                mat_gap = max(gaps)
+
+        # ── 교차검증 짝별 관측치 ──
+        # 자기신고 항목과 물리적 증거를 짝지어 놓은 값들이다. 불일치 스칼라 하나로는
+        # "왜 어긋났는지" 를 말할 수 없어서, 짝마다 통계를 따로 만든다.
+
+        # ③ 납기 ↔ 진척 추세: 지금 속도로 언제 끝나는가 vs 공장이 말하는 납기
+        pace_gap = np.nan
+        if last and last.get("produced_qty"):
+            elapsed = (_dt(last["reported_at"]) - _dt(o["ordered_at"])).total_seconds() / 86400
+            rate = last["produced_qty"] / max(elapsed, 1e-6)
+            if rate > 0:
+                projected = o["order_qty"] / rate
+                promised = (
+                    _dt(last.get("promised_date_reported", o["promised_date"]))
+                    - _dt(o["ordered_at"])
+                ).total_seconds() / 86400
+                pace_gap = (projected - promised) / max(promised, 1.0)
+
+        # ④ "이상 없음" ↔ 보고 지연: 문제가 없다는데 연락은 느려진다
+        #    `any` 로 재면 안 된다 — 곤란한 공장은 여러 회차 중 한 번은 신고하게 되고
+        #    그러면 신호가 0으로 죽어 **상관 부호가 뒤집힌다**(실측 −0.55).
+        #    회차 대비 **신고 비율**로 재야 "대체로 조용한데 늦다" 가 잡힌다.
+        delay_mean = m["report_delay_days_mean"] or 0.0
+        issue_rate = sum(1 for r in filed if r.get("issue_flag")) / len(filed) if filed else 0.0
+        issue_any = float(issue_rate > 0)
+        silent_delay = delay_mean * (1.0 - issue_rate)
+
+        # ⑤ 사진 ↔ 보고 시각: 지난주 사진을 다시 보냈는가
+        photo_stale = np.nan
+        stale = [
+            (_dt(r["reported_at"]) - _dt(r["photo_taken_at"])).total_seconds() / 3600
+            for r in filed
+            if "photo_taken_at" in r
+        ]
+        if stale:
+            photo_stale = max(stale)
+
+        # ② 자체 불량률 ↔ 잔업: 불량은 없다는데 잔업은 늘어난다
+        ot_vs_reject = np.nan
+        if t2:
+            ot = float(np.mean([r["overtime_hours"] for r in t2]))
+            ot_vs_reject = ot / (rep_rate * 100.0 + 0.3)
 
         f = fai.get(o["order_id"])
         rows.append(
@@ -130,7 +180,7 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                 "l1_reported_defect_rate": rep_rate,
                 "l1_scrap_ratio": last.get("scrap_qty", 0) / rep_produced,
                 "l1_rework_ratio": last.get("rework_qty", 0) / rep_produced,
-                "l1_issue_any": float(any(r.get("issue_flag") for r in filed)),
+                "l1_issue_any": issue_any,
                 "l1_overtime_mean": float(np.mean([r["overtime_hours"] for r in t2]))
                 if t2
                 else np.nan,
@@ -140,6 +190,10 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                     else np.nan
                 ),
                 "l1_material_gap": mat_gap,
+                "l1_pace_gap": pace_gap,
+                "l1_silent_delay": silent_delay,
+                "l1_photo_stale": photo_stale,
+                "l1_ot_vs_reject": ot_vs_reject,
                 "l1_fai_margin_min": f["margin_min"] if f else np.nan,
                 "l1_fai_out_of_tol": f["out_of_tol_count"] if f else np.nan,
                 "l1_fai_submitted": float(f is not None),
@@ -181,14 +235,26 @@ L0M_COLS = (
     "l0m_promise_changes",
     "l0m_promise_change_late",
 )
+# 교차검증 짝의 관측치. 자기신고 항목과 물리적 증거를 짝지어 놓은 값들이고,
+# `models/discrepancy.py` 가 **어느 짝이 어긋났는지** 를 여기서 읽는다.
+PAIR_COLS = (
+    "l1_material_gap",  # ① 보고 수량 ↔ 자재 소진량
+    "l1_ot_vs_reject",  # ② 자체 불량률 ↔ 잔업
+    "l1_pace_gap",  # ③ 보고 납기 ↔ 진척 추세
+    "l1_silent_delay",  # ④ "이상 없음" ↔ 보고 지연
+    "l1_photo_stale",  # ⑤ 사진 시각 ↔ 보고 시각
+)
+
 L1_COLS = (
+    "l1_rep_produced",
+    "l1_rep_defects",
     "l1_reported_defect_rate",
     "l1_scrap_ratio",
     "l1_rework_ratio",
     "l1_issue_any",
     "l1_overtime_mean",
     "l1_reject_ratio",
-    "l1_material_gap",
+    *PAIR_COLS,
     "l1_fai_margin_min",
     "l1_fai_out_of_tol",
     "l1_fai_submitted",

@@ -12,6 +12,13 @@ Goodhart 문헌의 표현대로 — 모든 지표를 결과 지표와 짝지으�
 비용으로 드러난다. 우리 교차검증 쌍(수집명세 §3)이 그 구현이다.
 
 **노이즈가 아니라 편향이라는 점**이 중요하다. 평균이 어긋나야 불일치 탐지가 값을 한다.
+
+## 메커니즘 정답값
+
+축소 보고는 한 가지 방식으로만 일어나지 않는다. 수량을 부풀리거나, 불량을 줄이거나,
+납기를 고수하거나, 이상 없다고 하거나, 지난주 사진을 다시 보낸다.
+**어느 방식이었는지를 `_mechanisms` 로 남긴다** — 사유 분해가 맞는지 확인할
+유일한 근거이고, 실데이터에서는 영원히 알 수 없는 값이다.
 """
 
 from __future__ import annotations
@@ -51,7 +58,12 @@ def build_reports(
     product: dict[str, Any],
     latents: dict[str, float],
     truth: dict[str, Any],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, float]]:
+    """``(보고 회차들, 메커니즘 정답값)``.
+
+    메커니즘을 보고 리스트에 섞어 넣지 않는다 — 보고를 순회하는 코드가
+    전부 예외 처리를 해야 하고, 실제로 테스트 세 개가 그렇게 깨졌다.
+    """
     rng = stream(cfg["seed"], "report", order["order_id"])
     qty = order["order_qty"]
     interval = cfg["scale"]["report_interval_days"]
@@ -71,6 +83,15 @@ def build_reports(
     out: list[dict[str, Any]] = []
     last_photo_at = None
     reported_promised = order["_promised_dt"]
+    # 메커니즘별 정답값. 사유 분해를 검증할 유일한 근거다 — 실데이터에서는
+    # "이 공장이 수량을 부풀렸는지" 를 영원히 알 수 없다.
+    mech = {
+        "inflation_max": 0.0,  # 수량 부풀리기
+        "shrink_min": 1.0,  # 불량 축소 (작을수록 심하다)
+        "promise_stale_days": 0.0,  # 낙관 보고 — 실제 완료가 보고 납기를 넘긴 최대 일수
+        "issue_suppressed": 0,  # 문제 은폐 — 곤란한데 "이상 없음" 이라고 한 회차 수
+        "photo_reused": 0,  # 증거 재활용
+    }
 
     for k in range(1, n_reports + 1):
         elapsed = min(k * interval, truth["actual_days"])
@@ -100,6 +121,7 @@ def build_reports(
         behind = max(0.0, (k * interval) / truth["actual_days"] - progress)
         inflation = factory["bias_sensitivity"] * behind * 0.5
         rep_produced = int(min(qty, round(true_c["produced"] * (1.0 + inflation))))
+        mech["inflation_max"] = max(mech["inflation_max"], inflation)
 
         # ── 불량 축소 보고. 나쁠수록 더 줄인다 ──
         # 편향(평균이 어긋남)과 노이즈(들쭉날쭉함)는 다른 것이고 **둘 다 있어야 한다.**
@@ -114,6 +136,7 @@ def build_reports(
                 2.0,
             )
         )
+        mech["shrink_min"] = min(mech["shrink_min"], shrink)
         rep_scrap = round(float(true_c["scrap"] * min(1.0, shrink + 0.35)))  # 폐기는 감추기 어렵다
         rep_rework = round(float(true_c["rework"] * shrink))  # 재작업이 가장 감추기 쉽다
 
@@ -124,6 +147,9 @@ def build_reports(
             and rng.random() < 0.35 + 0.4 * trouble
         ):
             reported_promised = projected_end + timedelta(days=float(rng.uniform(0, 4)))
+        mech["promise_stale_days"] = max(
+            mech["promise_stale_days"], (projected_end - reported_promised).total_seconds() / 86400
+        )
 
         row: dict[str, Any] = {
             "order_id": order["order_id"],
@@ -139,6 +165,8 @@ def build_reports(
             # 특이사항: 실제로 문제가 있어도 편향 때문에 "없음"이 나온다
             "issue_flag": bool(trouble > 0.35 and rng.random() > shrink),
         }
+        if trouble > 0.35 and not row["issue_flag"]:
+            mech["issue_suppressed"] += 1
 
         # ── T2: t2_compliance 확률로만 채워진다 ──
         if rng.random() < factory["t2_compliance"]:
@@ -164,6 +192,7 @@ def build_reports(
             # 사진: 곤란하면 지난주 것을 재사용한다
             if last_photo_at is not None and rng.random() < 0.15 + 0.45 * trouble:
                 row["photo_taken_at"] = _iso(last_photo_at)
+                mech["photo_reused"] += 1
             else:
                 taken = reported_at - timedelta(hours=float(rng.uniform(1, 20)))
                 row["photo_taken_at"] = _iso(taken)
@@ -171,7 +200,7 @@ def build_reports(
 
         out.append(row)
 
-    return out
+    return out, mech
 
 
 def build_fai(

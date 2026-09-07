@@ -71,7 +71,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         )
         truth = production.build_truth(cfg, o, factory, lat)
 
-        rep = reports.build_reports(cfg, o, factory, product, lat, truth)
+        rep, mech = reports.build_reports(cfg, o, factory, product, lat, truth)
         fai = reports.build_fai(cfg, o, factory, lat, truth)
         outcome = labels.build_outcome(cfg, o, truth, lat)
 
@@ -100,6 +100,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
                 "reported_defect_rate": round(reported_rate, 6)
                 if reported_rate is not None
                 else None,
+                **{f"mech_{k}": v for k, v in mech.items()},
                 "reported_vs_true_gap": (
                     round(lat["internal_defect_rate_true"] - reported_rate, 6)
                     if reported_rate is not None

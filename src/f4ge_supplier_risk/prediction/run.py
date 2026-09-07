@@ -32,7 +32,9 @@ def score_all(cfg: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame, dict[str
     disc_tr = discrepancy.fit_predict(train, train)
     disc = discrepancy.fit_predict(train, test)
 
-    scored = build_scores(train, pred_tr, disc_tr, test, pred, disc)
+    scored = build_scores(
+        train, pred_tr, disc_tr, test, pred, disc, discrepancy.reasons(train, test)
+    )
     trust = discrepancy.factory_trust(scored)
     metrics = evaluate(test, pred)
     return scored, trust, metrics

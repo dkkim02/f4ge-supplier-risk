@@ -30,6 +30,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from f4ge_supplier_risk.models.discrepancy import NO_EVIDENCE, REASONS
+
+_REASON_TEXT = {code: (txt, chk) for code, _, txt, chk in REASONS}
+_REASON_TEXT[NO_EVIDENCE[0]] = (NO_EVIDENCE[1], NO_EVIDENCE[2])
+
 # 위험 등급 — 계약의 4-tier 를 승계한다.
 # `high` 컷을 검사 강화 임계(_RISK_TIGHTEN_Q)와 **같은 선에 맞춘다.**
 # 어긋나 있으면 화면에 "위험 높음인데 권고 없음" 행이 생겨 자기모순으로 읽힌다.
@@ -57,6 +62,7 @@ def build_scores(
     test: pd.DataFrame,
     pred: np.ndarray,
     disc: np.ndarray,
+    reasons: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """`supplier-risk-score.v1` 모양의 행들.
 
@@ -72,22 +78,36 @@ def build_scores(
     trust_cut = float(by_factory.quantile(_TRUST_GATE_Q))
     low_trust = set(by_factory[by_factory >= trust_cut].index)
 
-    action, reason, trust_flag = [], [], []
-    for p, d, fid in zip(pred, disc, test["factory_id"].to_numpy(), strict=True):
+    # None 을 numpy 배열에 담으면 NaN 으로 바뀌고, NaN 은 truthy 라서
+    # `x or None` 을 통과해 **JSON 에 NaN 이 그대로 나간다.** object dtype 로 둔다.
+    prim = list(reasons["reason_primary"] if reasons is not None else [None] * len(test))
+    prim = [None if p is None or (isinstance(p, float) and np.isnan(p)) else str(p) for p in prim]
+    codes = (
+        reasons["reason_codes"].tolist() if reasons is not None else [[] for _ in range(len(test))]
+    )
+
+    action, reason, check, trust_flag = [], [], [], []
+    for p, d, fid, pc in zip(pred, disc, test["factory_id"].to_numpy(), prim, strict=True):
         untrusted = fid in low_trust
         trust_flag.append(untrusted)
+        # 사유가 있으면 그것을 말한다. **"어긋났다" 보다 "무엇이 어긋났다" 가 행동을 만든다.**
+        txt, chk = _REASON_TEXT.get(pc, (None, None))
         if untrusted and d >= disc_visit:
             action.append("site_visit")
-            reason.append("보고 신뢰도가 낮은 공장이고, 이 오더도 증거와 어긋난다")
+            reason.append(txt or "보고 신뢰도가 낮은 공장이고, 이 오더도 증거와 어긋난다")
+            check.append(chk or "현장 공정 · 검사 기록 전반")
         elif p >= risk_tighten:
             action.append("tighten_inspection")
             reason.append("예측 위험이 상위 10%")
+            check.append("입고검사 강화 · 제3자 DUPRO 발주")
         elif d >= disc_call:
             action.append("call")
-            reason.append("증거가 가리키는 것보다 보고가 좋다")
+            reason.append(txt or "증거가 가리키는 것보다 보고가 좋다")
+            check.append(chk or "보고 내용 재확인")
         else:
             action.append("none")
             reason.append("")
+            check.append("")
 
     return pd.DataFrame(
         {
@@ -104,6 +124,9 @@ def build_scores(
             "factory_trust_low": trust_flag,
             "recommended_action": action,
             "action_reason": reason,
+            "action_check": check,
+            "reason_primary": pd.Series(prim, index=test.index, dtype=object),
+            "reason_codes": codes,
         }
     )
 
@@ -126,4 +149,7 @@ def to_contract(row: pd.Series) -> dict[str, Any]:
         "factory_trust_low": bool(row["factory_trust_low"]),
         "recommended_action": row["recommended_action"],
         "action_reason": row["action_reason"] or None,
+        "action_check": row["action_check"] or None,
+        "reason_primary": row["reason_primary"] if isinstance(row["reason_primary"], str) else None,
+        "reason_codes": list(row["reason_codes"]),
     }

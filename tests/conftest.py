@@ -23,6 +23,16 @@ def table(cfg):
 
 
 @pytest.fixture(scope="session")
+def truth_map(cfg):
+    """오더별 진실 잠재값 — 사유 분해 검증에 쓴다."""
+    from f4ge_supplier_risk.generator.pipeline import build_dataset
+
+    c = dict(cfg)
+    c["scale"] = {**cfg["scale"], "months": 24}
+    return {r["order_id"]: r for r in build_dataset(c)["ground_truth"]}
+
+
+@pytest.fixture(scope="session")
 def world(cfg):
     products = masters.build_products(cfg)
     factories = masters.build_factories(cfg, products)
