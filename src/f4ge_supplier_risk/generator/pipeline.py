@@ -40,9 +40,8 @@ def _write(path: Path, rows: list[dict[str, Any]]) -> None:
             )
 
 
-def generate(cfg: dict[str, Any], out_dir: Path | str) -> dict[str, int]:
-    out = Path(out_dir)
-
+def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """파일로 쓰지 않고 메모리에 만든다. 민감도 스윕이 이 경로를 쓴다."""
     products = masters.build_products(cfg)
     factories = masters.build_factories(cfg, products)
     order_rows = orders.build_orders(cfg, factories, products)
@@ -109,21 +108,22 @@ def generate(cfg: dict[str, Any], out_dir: Path | str) -> dict[str, int]:
             }
         )
 
-    _write(out / "factories.jsonl", factories)
-    _write(out / "products.jsonl", products)
-    _write(out / "orders.jsonl", order_rows)
-    _write(out / "order_meta.jsonl", all_meta)
-    _write(out / "factory_reports.jsonl", all_reports)
-    _write(out / "fai_reports.jsonl", all_fai)
-    _write(out / "cell_daily.jsonl", [])  # L2 — 설치 공장 0곳. 스키마 자리만 잡아 둔다
-    _write(out / "quality_outcomes.jsonl", all_outcomes)
-    _write(out / "ground_truth.jsonl", all_truth)
-
     return {
-        "factories": len(factories),
-        "products": len(products),
-        "orders": len(order_rows),
-        "factory_reports": len(all_reports),
-        "fai_reports": len(all_fai),
-        "quality_outcomes": len(all_outcomes),
+        "factories": factories,
+        "products": products,
+        "orders": order_rows,
+        "order_meta": all_meta,
+        "factory_reports": all_reports,
+        "fai_reports": all_fai,
+        "cell_daily": [],  # L2 — 설치 공장 0곳. 스키마 자리만 잡아 둔다
+        "quality_outcomes": all_outcomes,
+        "ground_truth": all_truth,
     }
+
+
+def generate(cfg: dict[str, Any], out_dir: Path | str) -> dict[str, int]:
+    data = build_dataset(cfg)
+    out = Path(out_dir)
+    for name, rows in data.items():
+        _write(out / f"{name}.jsonl", rows)
+    return {k: len(v) for k, v in data.items() if k != "cell_daily"}
