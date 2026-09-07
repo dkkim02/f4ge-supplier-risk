@@ -5,8 +5,8 @@
 우리가 넣어 둔 가정을 되읽은 것이다.
 
 재는 것 넷:
-  · `L0`        거래 이력만으로 어디까지 되나
-  · `L0+L0′+L1` 공장 보고까지 받으면 얼마나 좋아지나  ← **계층 증분이 이 프로젝트의 주장**
+  · `L0`        거래 이력 + 우리 쪽 메타만으로 어디까지 되나 (1단 모델)
+  · `L0+L0′+L1` 공장 보고까지 받고 **2단 모델**로 쓰면  ← **계층 증분이 이 프로젝트의 주장**
   · `gap 복원`  보고와 실제의 격차를 관측값에서 복원할 수 있나  ← **핵심 상품**
   · `불합격률`   생성 데이터가 여전히 실무 범위(1~10%)에 있나
 """
@@ -30,7 +30,7 @@ from f4ge_supplier_risk import config
 from f4ge_supplier_risk.evaluation.metrics import evaluate, split_by_time
 from f4ge_supplier_risk.features.build import LAYERS, build
 from f4ge_supplier_risk.generator.pipeline import build_dataset
-from f4ge_supplier_risk.models.baseline import fit_predict
+from f4ge_supplier_risk.models import baseline, two_stage
 
 SEEDS = (20260907, 11, 4242)
 
@@ -40,6 +40,7 @@ SWEEPS: dict[str, tuple[str, tuple]] = {
     "bias_sensitivity": ("나쁠수록 더 축소", (0.0, 0.25, 0.5, 1.0)),
     "within_factory_ar1": ("시간 자기상관", (0.0, 0.3, 0.6, 0.85)),
     "severity_critical": ("critical 비중", (0.05, 0.15, 0.25, 0.40)),
+    "report_noise_cv": ("보고의 들쭉날쭉함", (0.0, 0.45, 0.9, 1.5)),
 }
 
 
@@ -76,9 +77,12 @@ def run_one(cfg: dict, seed: int) -> dict[str, float]:
     df = build(data)
     tr, te = split_by_time(df)
 
-    l0 = evaluate(te, fit_predict(tr, te, LAYERS["L0"]))["rank_corr_true"]
+    # L0 계층은 보고를 안 쓰므로 1단 모델이 유일한 선택지다.
+    # 전체 계층은 2단(보고 카운트를 타깃 쪽에서 쓰는 구조)으로 잰다.
+    base_cols = LAYERS["L0+L0′"]
     full_cols = LAYERS["L0+L0′+L1"]
-    full = evaluate(te, fit_predict(tr, te, full_cols))["rank_corr_true"]
+    l0 = evaluate(te, baseline.fit_predict(tr, te, base_cols))["rank_corr_true"]
+    full = evaluate(te, two_stage.fit_predict(tr, te, full_cols))["rank_corr_true"]
     return {
         "l0": l0,
         "full": full,

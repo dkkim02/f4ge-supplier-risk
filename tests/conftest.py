@@ -12,6 +12,17 @@ def cfg():
 
 
 @pytest.fixture(scope="session")
+def table(cfg):
+    """피처 테이블 — 모델 테스트가 쓴다."""
+    from f4ge_supplier_risk.features.build import build
+    from f4ge_supplier_risk.generator.pipeline import build_dataset
+
+    c = dict(cfg)
+    c["scale"] = {**cfg["scale"], "months": 24}
+    return build(build_dataset(c))
+
+
+@pytest.fixture(scope="session")
 def world(cfg):
     products = masters.build_products(cfg)
     factories = masters.build_factories(cfg, products)

@@ -47,6 +47,9 @@ assumptions:
   report_bias_mean: 0.5                # 실제 불량률의 절반으로 보고
   report_bias_sd: 0.25
   bias_sensitivity: 0.5                # 나쁠수록 더 축소 보고 — 핵심 상품
+  # 보고의 들쭉날쭉함(편향과 별개). 대충 센 것 · 사람마다 다른 기준 · 형식적으로 채운 숫자.
+  # ⚠ 2단 모델 성능이 이 값에 가장 크게 의존한다.
+  report_noise_cv: 0.45
   report_discipline_range: [0.3, 0.95]
   t2_compliance_range: [0.0, 0.9]
   # 유출 불량의 심각도 구성. **실측 근거 없음** — 다만 로트 불합격률을

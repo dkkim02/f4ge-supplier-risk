@@ -123,6 +123,10 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                 "l0m_promise_changes": m["promised_date_change_count"],
                 "l0m_promise_change_late": m["promised_date_change_last_progress"],
                 # ── L1 — 공장 자진 보고 ──
+                # 원 카운트를 그대로 남긴다. 2단 모델이 비율이 아니라 (불량수, 생산수)
+                # 쌍을 쓴다 — 생산 100개에서의 3%와 2,000개에서의 3%는 정보량이 다르다.
+                "l1_rep_produced": float(rep_produced if filed else 0),
+                "l1_rep_defects": float(rep_defects),
                 "l1_reported_defect_rate": rep_rate,
                 "l1_scrap_ratio": last.get("scrap_qty", 0) / rep_produced,
                 "l1_rework_ratio": last.get("rework_qty", 0) / rep_produced,

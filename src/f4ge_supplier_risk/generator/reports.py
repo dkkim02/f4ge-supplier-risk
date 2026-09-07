@@ -102,9 +102,16 @@ def build_reports(
         rep_produced = int(min(qty, round(true_c["produced"] * (1.0 + inflation))))
 
         # ── 불량 축소 보고. 나쁠수록 더 줄인다 ──
+        # 편향(평균이 어긋남)과 노이즈(들쭉날쭉함)는 다른 것이고 **둘 다 있어야 한다.**
+        # 노이즈가 없으면 보고가 진짜 불량률을 지나치게 잘 대표해서, 보고를 쓰는 모델의
+        # 성능이 실제보다 좋게 나온다. 대충 센 것 · 사람마다 다른 기준 ·
+        # 형식적으로 채워 넣은 숫자가 전부 여기 들어간다.
+        noise = float(rng.lognormal(0.0, cfg["assumptions"]["report_noise_cv"]))
         shrink = float(
             np.clip(
-                factory["report_bias"] * (1.0 - factory["bias_sensitivity"] * trouble), 0.05, 1.0
+                factory["report_bias"] * (1.0 - factory["bias_sensitivity"] * trouble) * noise,
+                0.02,
+                2.0,
             )
         )
         rep_scrap = round(float(true_c["scrap"] * min(1.0, shrink + 0.35)))  # 폐기는 감추기 어렵다
