@@ -1,11 +1,8 @@
-"""불일치 탐지 권고의 정밀도 — 09-07 값(검사강화 74.7% · 현장방문 95.6%)을 09-08 생성기에서 다시 잰다.
+"""검토 필요(review_needed) 권고의 정밀도 — 8 seed.
 
 채점 파이프라인(`prediction.run._predict`)과 같은 예측을 쓴다.
-09-08 재설계로 보고가 오는 공장이 3곳(유형 a)이 됐고, 같은 날 오후 규칙으로 보고 없는 오더에는
-site_visit·call 이 걸리지 않는다. 그래서 두 권고의 모집단이 다르다 —
-  검사 강화(tighten_inspection)  전체 오더에서 예측 위험 상위 10%
-  현장 방문(site_visit)           보고 있는 오더(유형 a) 중 못 믿을 공장 × 큰 불일치
-기저율을 전체와 유형 a 두 가지로 같이 낸다. "편향 심한 공장" = 실효 편향 max(report_bias, mes_input_bias) 이
+09-08 저녁부터 권고 코드는 `review_needed` 하나다. 네 소스가 12곳 전부에서 오므로 모집단은 전체 오더 하나다 —
+review_needed 가 실제 상위 20% 위험을 얼마나 잡는가 · 편향 심한 공장을 얼마나 잡는가. "편향 심한 공장" = 실효 편향 max(report_bias, mes_input_bias) 이
 12곳 중앙값 아래인 공장. 공장 정직도 Spearman 은 보고 있는 공장 3곳 위의 값이라 방향만 본다.
 """
 
@@ -31,7 +28,7 @@ from f4ge_supplier_risk.prediction.run import _predict
 from f4ge_supplier_risk.prediction.score import build_scores
 
 SEEDS = (20260907, 11, 4242, 7, 101, 2026, 31337, 909)
-ACTIONS = ("site_visit", "tighten_inspection", "call", "none")
+ACTIONS = ("review_needed", "none")
 
 
 def main() -> None:
@@ -40,6 +37,8 @@ def main() -> None:
     top20 = defaultdict(list)
     biased = defaultdict(list)
     base_top20, base_biased, base_biased_a, honesty = [], [], [], []
+    cnt_a, biased_a = [], []
+    n_test = 0  # 보고 있는 오더(유형 a) 안의 review_needed
 
     for seed in SEEDS:
         cf = copy.deepcopy(cfg)
@@ -65,12 +64,12 @@ def main() -> None:
         risky = truth >= np.quantile(truth, 0.8)
         fac = te["factory_id"].to_numpy()
         b = np.array([is_biased[f] for f in fac])
-        is_a = np.array([facs[f]["factory_type"] == "a" for f in fac])
         act = scored["recommended_action"].to_numpy()
+        n_test = len(te)
 
         base_top20.append(risky.mean())
         base_biased.append(b.mean())
-        base_biased_a.append(b[is_a].mean() if is_a.any() else np.nan)
+        base_biased_a.append(np.nan)
         for a in ACTIONS:
             m = act == a
             cnt[a].append(int(m.sum()))
@@ -88,16 +87,14 @@ def main() -> None:
         v = np.array(v, float)
         return f"{np.nanmean(v):.1%}"
 
-    print(f"\n{len(SEEDS)} seed 평균, 테스트 270건")
+    print(f"\n{len(SEEDS)} seed 평균, 테스트 {n_test}건")
     print(f"{'권고':20s} {'건수':>6s} {'실제 상위20% 위험':>18s} {'편향 심한 공장':>16s}")
     lines = ["| 권고 | 건수 | 실제 상위 20% 위험 | 편향 심한 공장 |", "|---|---|---|---|"]
     for a in ACTIONS:
         print(f"{a:20s} {np.mean(cnt[a]):6.1f} {f(top20[a]):>18s} {f(biased[a]):>16s}")
         lines.append(f"| {a} | {np.mean(cnt[a]):.1f} | {f(top20[a])} | {f(biased[a])} |")
-    print(f"{'— 기저율 (전체)':20s} {270:6d} {f(base_top20):>18s} {f(base_biased):>16s}")
-    print(f"{'— 기저율 (유형 a)':20s} {'':6s} {'':>18s} {f(base_biased_a):>16s}")
-    lines.append(f"| — 기저율 전체 | 270 | {f(base_top20)} | {f(base_biased)} |")
-    lines.append(f"| — 기저율 유형 a | | | {f(base_biased_a)} |")
+    print(f"{'— 기저율 (전체)':20s} {n_test:6d} {f(base_top20):>18s} {f(base_biased):>16s}")
+    lines.append(f"| — 기저율 전체 | {n_test} | {f(base_top20)} | {f(base_biased)} |")
     h = np.array(honesty)
     print(f"\n공장 정직도 Spearman (보고 있는 공장 {len(h) and 3}곳): 평균 {h.mean():+.3f} · 양수 {int((h>0).sum())}/{len(h)} · 범위 {h.min():+.2f}~{h.max():+.2f}")
     lines.append(f"\n공장 정직도 Spearman (3곳): 평균 {h.mean():+.3f} · 양수 {int((h>0).sum())}/{len(h)}")

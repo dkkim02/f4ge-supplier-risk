@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from f4ge_supplier_risk.generator import labels, latent, masters, meta, orders, production, reports
+from f4ge_supplier_risk.generator import erp, labels, latent, masters, meta, orders, production, reports
 
 OUT_FILES = (
     "factories.jsonl",
@@ -19,6 +19,7 @@ OUT_FILES = (
     "factory_reports.jsonl",
     "fai_reports.jsonl",
     "cell_daily.jsonl",
+    "erp_daily.jsonl",
     "quality_outcomes.jsonl",
     "ground_truth.jsonl",
 )
@@ -61,6 +62,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     all_meta: list[dict[str, Any]] = []
     all_truth: list[dict[str, Any]] = []
     all_cell: list[dict[str, Any]] = []
+    all_erp: list[dict[str, Any]] = []
 
     for o in order_rows:
         factory = fac_by_id[o["factory_id"]]
@@ -74,6 +76,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
 
         rep, mech = reports.build_reports(cfg, o, factory, product, lat, truth)
         all_cell.extend(reports.build_cell_daily(cfg, o, factory, lat, truth))
+        all_erp.extend(erp.build_erp_daily(cfg, o, factory, product, lat, truth))
         fai = reports.build_fai(cfg, o, factory, lat, truth)
         outcome = labels.build_outcome(cfg, o, truth, lat)
 
@@ -118,7 +121,8 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         "order_meta": all_meta,
         "factory_reports": all_reports,
         "fai_reports": all_fai,
-        "cell_daily": all_cell,  # L2 — has_cell 공장만
+        "cell_daily": all_cell,  # L2 — CellOS, 12곳 전부
+        "erp_daily": all_erp,  # L3 — ERP, 12곳 전부. 채우는 필드는 공장마다 다르다
         "quality_outcomes": all_outcomes,
         "ground_truth": all_truth,
     }
@@ -129,4 +133,4 @@ def generate(cfg: dict[str, Any], out_dir: Path | str) -> dict[str, int]:
     out = Path(out_dir)
     for name, rows in data.items():
         _write(out / f"{name}.jsonl", rows)
-    return {k: len(v) for k, v in data.items() if k != "cell_daily"}
+    return {k: len(v) for k, v in data.items() if k not in ("cell_daily", "erp_daily")}

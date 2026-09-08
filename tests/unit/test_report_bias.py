@@ -3,7 +3,7 @@
 import numpy as np
 
 from f4ge_supplier_risk.generator import reports
-from f4ge_supplier_risk.generator.production import counts_at
+from f4ge_supplier_risk.generator.production import counts_at, progress_at
 
 
 def test_reported_defects_are_understated(cfg, world):
@@ -23,18 +23,24 @@ def test_reported_defects_are_understated(cfg, world):
     assert np.mean(np.array(diffs) > 0) > 0.5
 
 
-def test_material_consumption_is_not_biased(cfg, world):
-    """자재 소진은 물리량이라 실제값을 따라간다 — 수량 부풀리기의 대조군."""
-    # MES 가 있는 공장을 골라야 한다 — 없는 공장은 보고가 아예 오지 않는다.
-    picked = next((w for w in world if w[1]["has_mes"]), None)
-    if picked is None:
-        return
-    order, factory, product, lat, truth = picked
-    rows, _ = reports.build_reports(cfg, order, factory, product, lat, truth)
-    seen = [r for r in rows if not r["is_missing"] and "material_consumed_qty" in r]
-    assert seen, "MES 공장인데 보고가 없다"
-    # 일 단위 집계라 초반 회차는 셋업 구간이고 생산이 0 이다. 마지막 회차로 본다.
-    assert seen[-1]["material_consumed_qty"] > 0
+def test_erp_material_follows_truth(cfg, world):
+    """ERP 자재 소진(불출 − 재고)은 물리량이라 실제 (생산 + 폐기) × 단위 소요를 따라간다 — 수량 부풀리기의 대조군."""
+    from f4ge_supplier_risk.generator import erp
+
+    checked = 0
+    for order, factory, product, lat, truth in world:
+        rows = erp.build_erp_daily(cfg, order, factory, product, lat, truth)
+        filed = [r for r in rows if not r["is_missing"]]
+        if not filed:
+            continue
+        last = filed[-1]
+        # 마지막 마감이 결측이면 filed[-1] 은 그 전날이다 — 그 날의 진척으로 비교한다
+        c = counts_at(truth, order["order_qty"], progress_at(truth, last["day_index"] + 1))
+        expect = (c["produced"] + c["scrap"]) * product["material_per_unit"]
+        consumed = last["material_issued_qty"] - last["material_on_hand_qty"]
+        assert abs(consumed - expect) <= 0.02 * expect + 1.0, order["order_id"]
+        checked += 1
+    assert checked > 0
 
 
 def test_missing_reports_carry_no_numbers(cfg, world):

@@ -1,0 +1,519 @@
+<title>협력사 품질 관제</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://spoqa.github.io/spoqa-han-sans/css/SpoqaHanSansNeo.css" rel="stylesheet" type="text/css">
+<style>
+/* ── 디자인 토큰: Figma 「Analytics Dashboard (Community)」 에서 추출 ──────────────────────────
+   페이지 #f9f9f9 · 카드 #ffffff r20 · 그림자 0 5px 20px rgba(0,0,0,.05) · 사이드바 250px
+   본문 #151e23 · 보조 #838383 · 강조 #1b59f8 · 선택 #f2f7ff · 구분선 #eff0f6 · 12/14/16 · 큰 숫자 Bold 24
+   글꼴: Spoqa Han Sans Neo (spoqa.github.io 웹폰트, 400/500/700 — 600 없음이라 중간 강조는 500).
+   색 채널은 셋으로 가른다(09-07 규칙 승계): 위험 4-tier = 컬러 · 검토 필요 = 무채색(짙은 배경 반전) · 불일치 = 보라. 서로 빌리지 않는다.
+   전제(09-08 저녁): **한 공장은 한 번에 한 오더만 돈다.** 카드 = 그 공장의 현재 오더. 출하 뒤 입고검사 결과를 기다리는 오더는 "결과 대기".
+   소스(09-08 저녁): FactoryOS 에 MES · CellOS · ERP · 포지 기록 네 곳이 12곳 전부에서 온다. 연동/미연동 구분 없음. 차이는 보고 품질(형식·필드·성실도·정직도).
+   목표 둘(사용자): 제조 품질(내부 불량률 p) · 검수 품질(검출률 d). 보고 정직도 b 가 둘을 가른다. κ 는 화면에서 뺐다 — (1−d)/b 로 분해해 보인다. */
+:root{
+  --page:#f9f9f9; --card:#fff; --line:#eff0f6; --line-2:#e4e5e7;
+  --text:#151e23; --text-2:#4d4d4d; --muted:#838383; --faint:#b5bec6;
+  --accent:#1b59f8; --accent-bg:#f2f7ff; --accent-dk:#0f2552;
+  --shadow:0 5px 20px rgba(0,0,0,.05);
+  --risk-low-bg:#eef1f4; --risk-low-tx:#5b6470;
+  --risk-medium-bg:#fff4e0; --risk-medium-tx:#9a5b00;
+  --risk-high-bg:#ffe8e1; --risk-high-tx:#c2410c;
+  --risk-critical-bg:#fde0e5; --risk-critical-tx:#b3122b;
+  --gap-bg:#efe9ff; --gap-tx:#5b3fd6;
+  --good:#1fe08f; --bad:#ff3e13;
+  --sans:"Spoqa Han Sans Neo","Apple SD Gothic Neo","Pretendard","Noto Sans KR",-apple-system,system-ui,sans-serif;
+  --mono:"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--page);color:var(--text);font:400 14px/20px var(--sans);-webkit-font-smoothing:antialiased;word-break:keep-all}
+b{font-weight:700}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sub{color:var(--muted);font-size:12px;line-height:16px}
+.faint{color:var(--faint)}
+a,button{font:inherit;color:inherit}
+[hidden]{display:none!important}
+
+/* ── 골격 ── */
+.app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+.side{background:var(--card);border-right:1px solid var(--line);padding:22px 16px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px}
+.logo{display:flex;align-items:center;gap:10px;padding:6px 10px 18px}
+.logo .mark{width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font:700 12px/1 var(--sans);letter-spacing:.02em}
+.logo .name{font:500 14px/18px var(--sans)}
+.logo .name small{display:block;font:400 11px/14px var(--sans);color:var(--muted)}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;border-radius:10px;padding:11px 12px;color:var(--text-2);font-weight:500;cursor:pointer;position:relative}
+.nav button:hover{background:#f6f7fa}
+.nav button[aria-current="page"]{background:var(--accent-bg);color:var(--accent);font-weight:500}
+.nav button[aria-current="page"]::before{content:"";position:absolute;left:-16px;top:8px;width:4px;height:24px;border-radius:0 4px 4px 0;background:var(--accent)}
+.nav .ic{width:18px;height:18px;flex:none;opacity:.9}
+.nav .cnt{margin-left:auto;font:500 11px/16px var(--sans);background:var(--text);color:#fff;border-radius:999px;padding:0 7px;min-width:20px;text-align:center}
+.nav .cnt.zero{background:var(--line);color:var(--muted)}
+.side .foot{margin-top:auto;padding:10px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:18px}
+.side .foot b{color:var(--text-2);font-weight:500}
+main{padding:22px 28px 40px;min-width:0}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.top h1{margin:0;font:700 22px/28px var(--sans);letter-spacing:-.01em}
+.top .crumb{color:var(--muted);font-size:13px;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.top .crumb button{border:0;background:none;padding:0;color:var(--accent);cursor:pointer;font-weight:500}
+.top .stamp{text-align:right;color:var(--muted);font-size:12px;line-height:18px}
+.top .stamp b{color:var(--text-2);font-weight:500}
+
+/* ── 카드 ── */
+.card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:18px 20px}
+.card-h{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;margin-bottom:12px;flex-wrap:wrap}
+.card-t{font:500 14px/20px var(--sans);white-space:nowrap}
+.card-s{color:var(--muted);font-size:12px}
+.big{font:700 24px/28px var(--sans);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.big small{font:400 12px/16px var(--sans);color:var(--muted);margin-left:4px;letter-spacing:0}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.kv:first-of-type{border-top:0}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:500;font-variant-numeric:tabular-nums;text-align:right}
+
+/* ── 칩 ── */
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 9px;font:500 11px/16px var(--sans);white-space:nowrap;vertical-align:middle}
+.chip.risk.low{background:var(--risk-low-bg);color:var(--risk-low-tx)}
+.chip.risk.medium{background:var(--risk-medium-bg);color:var(--risk-medium-tx)}
+.chip.risk.high{background:var(--risk-high-bg);color:var(--risk-high-tx)}
+.chip.risk.critical{background:var(--risk-critical-bg);color:var(--risk-critical-tx)}
+.chip.act{background:var(--text);color:#fff}
+.chip.act.none{background:var(--line);color:var(--muted)}
+.chip.gap{background:var(--gap-bg);color:var(--gap-tx)}
+.chip.mes{background:var(--accent-bg);color:var(--accent)}
+.chip.nomes{background:none;border:1px dashed var(--faint);color:var(--muted);font-weight:400}
+.chip.prd{background:#f4f5f7;color:var(--text-2);font-weight:400}
+.chip.st{background:#f4f5f7;color:var(--text-2);font-weight:400}
+.chip.st.run{background:var(--accent-bg);color:var(--accent)}
+.nopath{color:var(--muted);font-size:12px}
+.nopath::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px dashed var(--faint);margin-right:5px;vertical-align:-1px}
+.bar{display:inline-block;width:100%;height:6px;border-radius:999px;background:var(--line);overflow:hidden;vertical-align:middle}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
+.bar i.over{background:var(--risk-high-tx)}
+
+/* ── 화면 A: 공장 그리드 ── */
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+@media (max-width:1400px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fac{cursor:pointer;text-align:left;border:1px solid transparent;transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;gap:12px;min-height:250px}
+.fac:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.08)}
+.fac:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fac.idle{opacity:.72}
+.fac .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.fac .nm{font:500 16px/20px var(--sans)}
+.fac .where{color:var(--muted);font-size:12px;margin-top:3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cur{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fbfbfc}
+.cur .l{font:500 11px/14px var(--sans);color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.cur .o{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 0 6px}
+.cur .o b{font:500 14px/18px var(--sans)}
+.cur .o .sub{white-space:nowrap}
+.cur .due{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font-size:11px;color:var(--muted)}
+.cur.none{color:var(--muted);font-size:12px;text-align:center;padding:16px 12px}
+.fac .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fac .kpi .v{font:700 18px/22px var(--sans);font-variant-numeric:tabular-nums}
+.fac .kpi .v small{font:400 10px/12px var(--sans);color:var(--muted);margin-left:2px}
+.fac .kpi .l{font-size:11px;color:var(--muted);margin-top:2px}
+.fac .kpi.zero .v{color:var(--faint)}
+.fac svg.spark{width:100%;height:40px;display:block}
+.fac .ft{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:10px;font-size:12px;color:var(--muted)}
+.grid-sep{grid-column:1/-1;display:flex;align-items:center;gap:10px;color:var(--muted);font:500 12px/16px var(--sans);margin-top:6px}
+.grid-sep::after{content:"";flex:1;height:1px;background:var(--line-2)}
+
+/* ── 화면 B: 공장 상세 ── */
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:16px}
+@media (max-width:1000px){.row3{grid-template-columns:1fr}}
+.tiers{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--line);margin:8px 0 6px}
+.tiers i{display:block;height:100%}
+.tiers .low{background:#c9d0d8}.tiers .medium{background:#f5b74f}.tiers .high{background:#ff7a45}.tiers .critical{background:#e51837}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:0}
+.bottom{display:grid;grid-template-columns:minmax(0,8fr) minmax(0,4fr);gap:16px}
+@media (max-width:1100px){.bottom{grid-template-columns:1fr}}
+.formula{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:12px;align-items:stretch;margin:6px 0 4px}
+@media (max-width:900px){.formula{grid-template-columns:1fr}.fop{display:none}}
+.fbox{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:#fbfbfc}
+.fbox.out{background:var(--accent-bg);border-color:#dbe7ff}
+.fbox .fl{font:500 11px/16px var(--sans);color:var(--muted)}
+.fbox .fv{font:700 20px/26px var(--sans);margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.fbox .fd{font-size:11px;line-height:15px;color:var(--muted)}
+.fop{align-self:center;font:500 18px/1 var(--sans);color:var(--faint)}
+.kbar{position:relative;height:6px;background:var(--line);border-radius:999px;margin:8px 0 6px}
+.kbar i{position:absolute;top:-3px;width:1px;height:12px;background:var(--faint)}
+.kbar b{position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;background:var(--accent);transform:translateX(-6px)}
+.note{color:var(--text-2);font-size:12px;line-height:18px;border-top:1px solid var(--line);padding-top:10px;margin-top:12px}
+.evid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:900px){.evid{grid-template-columns:1fr}}
+.reason{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.reason .t{font-weight:500;font-size:13px}
+.reason .c{color:var(--muted);font-size:12px;margin-top:2px}
+.reason.fired{border-color:#d9cffb;background:#faf8ff}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font:500 11px/16px var(--sans);color:var(--muted);padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+th.n,td.n{text-align:right}
+td .why{white-space:normal;line-height:17px;min-width:120px}
+.wrap{overflow-x:auto}
+.empty{color:var(--muted);text-align:center;padding:22px 0;font-size:13px}
+.ev-day{display:flex;align-items:baseline;gap:10px;margin:14px 0 6px;font:500 12px/16px var(--sans)}
+.ev-day:first-child{margin-top:0}
+.ev-day .cnt{color:var(--muted);font-weight:400}
+.ev-day.today .d{color:var(--accent)}
+.ev{display:grid;grid-template-columns:14px 52px 1fr;gap:8px;padding:5px 0;font-size:12px;line-height:17px;color:var(--text-2)}
+.ev .dot{width:8px;height:8px;border-radius:50%;margin-top:5px;background:var(--faint)}
+.ev.report .dot{background:var(--accent)}.ev.missing .dot{background:none;border:1.5px dashed var(--faint)}
+.ev.fai .dot{background:#7c5cff}.ev.label .dot{background:var(--text)}.ev.ship .dot{background:#9098a3}.ev.order .dot{background:#c9d0d8}.ev.score .dot{background:var(--good)}
+.ev.erp_missing .dot{background:none;border:1.5px dashed #8a6cf5}
+.fac .kpis{grid-template-columns:1fr 1fr 1fr}
+.qbar{position:relative;height:6px;border-radius:999px;background:var(--line);margin:6px 0 4px}
+.qbar b{position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;background:var(--accent);transform:translateX(-6px)}
+.qbar i{position:absolute;top:-3px;width:1px;height:12px;background:var(--faint)}
+.ev .o{font-family:var(--mono);color:var(--muted);font-size:11px;padding-top:1px}
+details summary{cursor:pointer;color:var(--accent);font-size:12px;font-weight:500;margin-top:10px;list-style:none}
+details summary::-webkit-details-marker{display:none}
+.rowlink{cursor:pointer;color:var(--accent);font-weight:500}
+.tip{position:fixed;pointer-events:none;background:var(--text);color:#fff;font-size:12px;line-height:16px;padding:8px 10px;border-radius:8px;opacity:0;transition:opacity .1s;white-space:pre;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+@media (max-width:820px){.app{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center}.side .foot{margin:0 0 0 auto;border:0}main{padding:16px}}
+</style>
+
+<div class="app">
+  <aside class="side">
+    <div class="logo"><div class="mark">F4</div><div class="name">협력사 품질<small>f4ge-supplier-risk</small></div></div>
+    <nav class="nav" aria-label="화면">
+      <button id="navGrid" aria-current="page"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>공장<span class="cnt" id="cntFac">—</span></button>
+      <button id="navQueue"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="17" r="3"/></svg>검토 필요<span class="cnt" id="cntQueue">—</span></button>
+    </nav>
+    <div class="foot" id="foot"></div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <div>
+        <div class="crumb" id="crumb"></div>
+        <h1 id="title">협력 공장</h1>
+      </div>
+      <div class="stamp" id="stamp"></div>
+    </div>
+
+    <section id="viewGrid"><div class="grid" id="grid"></div></section>
+
+    <section id="viewFac" hidden>
+      <div class="row3">
+        <div class="card" id="cNow"></div>
+        <div class="card" id="cPred"></div>
+        <div class="card" id="cKey"></div>
+      </div>
+      <div class="bottom">
+        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <div class="card">
+            <div class="card-h"><div class="card-t">왜 이렇게 예측하는가</div><div class="card-s" id="whySub"></div></div>
+            <div id="why"></div>
+            <div class="note" id="whyNote"></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><div class="card-t">이상의 근거 — 현재 오더</div><div class="card-s" id="evSub"></div></div>
+            <div id="ev"></div>
+            <div class="note" id="evNote"></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><div class="card-t">결과 대기 · 최근 완료 오더</div><div class="card-s" id="histSub"></div></div>
+            <div class="wrap"><table id="tHist"></table></div>
+          </div>
+        </div>
+        <div class="card" style="min-width:0">
+          <div class="card-h"><div class="card-t">일자별 로그</div><div class="card-s" id="logSub"></div></div>
+          <div id="log"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="viewQueue" hidden>
+      <div class="card">
+        <div class="card-h"><div class="card-t">검토 필요 — 진행 중 오더</div><div class="card-s" id="qSub"></div></div>
+        <div class="wrap"><table id="tQueue"></table></div>
+        <div class="note">권고는 <b>검토 필요</b> 하나다. 무엇을 할지는 담당자가 정한다. 「어긋난 것」은 왜 걸렸는지(예측 위험 상위 10% 또는 보고와 증거의 불일치), 「확인할 것」은 무엇을 대조할지다.</div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="tip" id="tip"></div>
+
+<script type="application/json" id="d">__DATA__</script>
+<script>
+(async () => {
+const raw = document.getElementById("d").textContent.trim();
+let D;
+if (raw === "__LIVE__") {
+  const url = new URL(location.href);
+  if (url.searchParams.get("key")) { try { localStorage.setItem("sr_key", url.searchParams.get("key")); } catch (e) {}
+    url.searchParams.delete("key"); history.replaceState(null, "", url.toString()); }
+  let key = null; try { key = localStorage.getItem("sr_key"); } catch (e) {}
+  const res = await fetch("/api/dashboard", { headers: key ? { "X-API-Key": key } : {} });
+  if (!res.ok) {
+    document.querySelector("main").innerHTML = `<div class="card"><div class="card-t">${res.status === 401 ? "API 키가 필요합니다" : res.status === 404 ? "채점 결과가 아직 없습니다" : "불러오지 못했습니다 (" + res.status + ")"}</div>
+      <div class="card-s">${res.status === 401 ? "주소 뒤에 ?key=발급받은키 를 붙여 한 번 열면 저장됩니다." : res.status === 404 ? "관리자가 POST /api/score/run 을 실행하면 나타납니다." : ""}</div></div>`;
+    return;
+  }
+  D = await res.json();
+} else { D = JSON.parse(raw); }
+
+const R = D.rows, F = D.factories, SITE = D.role === "site", LOG = D.log || {}, TODAY = D.today;
+const fmt = (n, d = 0) => Number(n).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const RISK = { low: "낮음", medium: "보통", high: "높음", critical: "심각" };
+const TIERS = ["low", "medium", "high", "critical"];
+const facName = id => id.replace("fac_kr_", "공장 ");
+const oid = r => r.id.replace("ord_", "");
+const riskChip = lv => `<span class="chip risk ${lv}">${RISK[lv]}</span>`;
+const actChip = a => a === "review_needed" ? `<span class="chip act">검토 필요</span>` : `<span class="chip act none">—</span>`;
+const PERIOD = { daily: "일 집계", shift: "시프트 집계", weekly: "주 집계" };
+const profChip = f => { const pf = f.profile || {}; const n = (pf.fieldsMes || []).length + (pf.fieldsErp || []).length, m = (pf.fieldsMesAll || []).length + (pf.fieldsErpAll || []).length;
+  return `<span class="chip mes" title="MES 집계 주기 · 채우는 선택 필드 수">${PERIOD[pf.period] || "—"} · 필드 ${n}/${m}</span>`; };
+const pct = (v, d = 1) => v == null || Number.isNaN(v) ? "—" : (v * 100).toFixed(d) + "%";
+const gapChip = r => r.discFlag ? `<span class="chip gap">${r.disc > 0 ? "+" : ""}${r.disc.toFixed(2)}</span>` : `<span class="mono sub">${r.disc.toFixed(2)}</span>`;
+const dash = `<span class="faint">—</span>`;
+const bar = p => `<span class="bar"><i class="${p > 1 ? "over" : ""}" style="width:${Math.min(Math.max(p, 0), 1) * 100}%"></i></span>`;
+const progText = r => r.orderedAt > TODAY ? `<span class="sub">발주 전</span>` : r.prog > 1 ? `<span class="mono" style="color:var(--risk-high-tx)">납기 +${Math.round((Math.min(r.prog, 1.35) - 1) * 100)}%</span>` : `<span class="mono">${Math.round(r.prog * 100)}%</span>`;
+// 상태 — 한 공장에 한 오더 전제. 생산 중(출하 전) / 결과 대기(출하 뒤 입고검사 전) / 완료(결과 도착) / 발주 전(정적 발행본만)
+const status = r => r.late ? "done" : r.orderedAt > TODAY ? "upcoming" : r.shipped ? "waiting" : "running";
+const ST = { running: ["생산 중", "run"], waiting: ["결과 대기", ""], done: ["완료", ""], upcoming: ["발주 전", ""] };
+const stChip = r => { const [t, c] = ST[status(r)]; return `<span class="chip st ${c}">${t}</span>`; };
+const whyCell = r => r.why ? `${r.why}${r.reasons.length > 1 ? ` <span class="sub">+${r.reasons.length - 1}</span>` : ""}` : dash;
+
+const byFac = {}; for (const r of R) (byFac[r.fac] ??= []).push(r);
+// 공장별 현재 오더 — 생산 중인 것 중 가장 최근 발주. 둘 이상이면 데이터가 전제를 어긴 것이라 표시한다.
+function facState(f) {
+  const mine = byFac[f.id] || [];
+  const running = mine.filter(r => status(r) === "running").sort((a, b) => b.orderedAt.localeCompare(a.orderedAt));
+  return { mine, cur: running[0] || null, extra: Math.max(running.length - 1, 0),
+    waiting: mine.filter(r => status(r) === "waiting"), done: mine.filter(r => r.late).sort((a, b) => b.orderedAt.localeCompare(a.orderedAt)),
+    upcoming: mine.filter(r => status(r) === "upcoming").sort((a, b) => a.orderedAt.localeCompare(b.orderedAt)) };
+}
+const queue = R.filter(r => r.act === "review_needed" && !r.late && r.orderedAt <= TODAY);
+
+function tbl(id, cols, rows, empty) {
+  const el = document.getElementById(id);
+  if (!rows.length) { el.innerHTML = `<tbody><tr><td class="empty" colspan="${cols.length}">${empty}</td></tr></tbody>`; return; }
+  el.innerHTML = `<thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${c.h}</th>`).join("")}</tr></thead>`
+    + `<tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}">${c.f(r)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+}
+
+/* 스파크라인 — 이 공장 오더의 예상 불량(로그 축), 시간순. 표시된 점이 현재 오더 */
+function spark(rows, cur) {
+  const pts = [...rows].filter(r => r.orderedAt <= TODAY).sort((a, b) => a.day - b.day);
+  if (pts.length < 2) return `<svg class="spark" viewBox="0 0 200 40"></svg>`;
+  const ys = pts.map(p => Math.log10(Math.max(p.ppm, 20)));
+  const lo = Math.min(...ys), hi = Math.max(...ys), span = Math.max(hi - lo, 0.3);
+  const X = i => (i / (pts.length - 1)) * 196 + 2, Y = v => 36 - ((v - lo) / span) * 28;
+  const line = ys.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+  const ci = cur ? pts.indexOf(cur) : -1;
+  return `<svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${line}L198,40L2,40Z" fill="#1b59f8" opacity=".10"/>
+    <path d="${line}" fill="none" stroke="#1b59f8" stroke-width="1.6" stroke-linejoin="round"/>
+    ${ci >= 0 ? `<circle cx="${X(ci).toFixed(1)}" cy="${Y(ys[ci]).toFixed(1)}" r="3" fill="#fff" stroke="#1b59f8" stroke-width="1.8"/>` : ""}
+  </svg>`;
+}
+
+/* ── 공통 헤더 ── */
+document.getElementById("cntFac").textContent = F.length;
+const cq = document.getElementById("cntQueue"); cq.textContent = queue.length; cq.classList.toggle("zero", !queue.length);
+const nRunning = F.filter(f => facState(f).cur).length;
+document.getElementById("foot").innerHTML = `<b>소스 4종</b> ${(D.coverage.sources || ["MES", "CellOS", "ERP", "포지 기록"]).join(" · ")}<br>FactoryOS 연동 ${D.coverage.total}/${D.coverage.total}<br>${TODAY} 채점${D.runId ? ` · <span class="mono">${D.runId}</span>` : ""}`;
+document.getElementById("stamp").innerHTML = `<b>${TODAY}</b> 기준 · 24시간마다 채점<br>생산 중 ${nRunning}곳 · 결과 대기 ${R.filter(r => status(r) === "waiting").length}건 · 검토 필요 ${queue.length}건`;
+
+/* ── 화면 전환 ── */
+const views = { grid: "viewGrid", fac: "viewFac", queue: "viewQueue" };
+function go(view, facId) {
+  for (const k in views) document.getElementById(views[k]).hidden = k !== view;
+  document.getElementById("navGrid").setAttribute("aria-current", view !== "queue" ? "page" : "false");
+  document.getElementById("navQueue").setAttribute("aria-current", view === "queue" ? "page" : "false");
+  const crumb = document.getElementById("crumb"), title = document.getElementById("title");
+  if (view === "grid") { crumb.innerHTML = "협력사 품질 관제"; title.textContent = "협력 공장"; }
+  else if (view === "queue") { crumb.innerHTML = "협력사 품질 관제"; title.textContent = "검토 필요"; }
+  else { crumb.innerHTML = `<button id="back">← 협력 공장</button>`; document.getElementById("back").onclick = () => go("grid"); renderFac(facId); }
+  window.scrollTo({ top: 0 });
+  if (view === "fac") history.replaceState(null, "", "#" + facId); else history.replaceState(null, "", location.pathname + location.search);
+}
+document.getElementById("navGrid").onclick = () => go("grid");
+document.getElementById("navQueue").onclick = () => go("queue");
+
+/* ── 화면 A: 공장 그리드 — 카드 = 그 공장의 현재 오더. 검토 필요 → 예상 불량 순, 생산 중 오더 없는 공장은 아래 ── */
+(() => {
+  const cards = F.map(f => ({ f, ...facState(f) }))
+    .sort((a, b) => (!!b.cur) - (!!a.cur) || ((b.cur?.act === "review_needed") - (a.cur?.act === "review_needed")) || ((b.cur?.ppm || 0) - (a.cur?.ppm || 0)) || b.f.ppmMed - a.f.ppmMed);
+  const running = cards.filter(c => c.cur), idle = cards.filter(c => !c.cur);
+  const card = ({ f, mine, cur, extra, waiting, done }) => `
+    <button class="card fac ${cur ? "" : "idle"}" data-id="${f.id}" aria-label="${facName(f.id)} 상세">
+      <div class="hd">
+        <div><div class="nm">${facName(f.id)}</div>
+          <div class="where">${f.region ? `<span>${f.region}</span><span class="faint">·</span>` : ""}<span class="chip prd">${f.prd}</span></div></div>
+        ${profChip(f)}
+      </div>
+      ${cur ? `<div class="cur">
+        <div class="l"><span>현재 오더${extra ? ` <span style="color:var(--risk-high-tx)">+${extra} 동시</span>` : ""}</span><span>${cur.act === "review_needed" ? actChip(cur.act) : riskChip(cur.risk)}</span></div>
+        <div class="o"><b>${oid(cur)}</b><span class="sub">${cur.prd} ${fmt(cur.qty)}개 · ${cur.mkt}</span></div>
+        <div class="due"><span>납기 <span class="mono">${cur.promised.slice(5)}</span></span>${bar(cur.prog)}${progText(cur)}</div>
+      </div>` : `<div class="cur none">생산 중 오더 없음${done.length ? `<br><span class="sub">마지막 완료 ${oid(done[0])} · ${done[0].lotRej ? "로트 불합격" : "로트 합격"}</span>` : ""}</div>`}
+      <div class="kpis">
+        <div class="kpi ${cur ? "" : "zero"}"><div class="v">${cur ? pct(cur.internal) : "—"}</div><div class="l">제조 품질 · 내부 불량률</div></div>
+        <div class="kpi"><div class="v">${pct(f.detection)}</div><div class="l">검수 품질 · 검출률</div></div>
+        <div class="kpi ${cur ? "" : "zero"}"><div class="v">${cur ? fmt(cur.ppm) : "—"}<small>PPM</small></div><div class="l">예상 유출${cur ? " · " + RISK[cur.risk] : ""}</div></div>
+      </div>
+      ${spark(mine, cur)}
+      <div class="ft">
+        <span>결과 대기 <b class="mono" style="font-weight:500">${waiting.length}</b>건 · 공장 중앙 <b class="mono" style="font-weight:500">${fmt(f.ppmMed)}</b> PPM</span>
+        ${SITE ? "" : `<span>보고 정직도 <b class="mono" style="font-weight:500">${pct(f.honesty, 0)}</b>${f.trustLow ? ` <span class="chip gap">불일치 반복</span>` : ""}</span>`}
+      </div>
+    </button>`;
+  document.getElementById("grid").innerHTML =
+    (running.length ? `<div class="grid-sep">생산 중 ${running.length}곳</div>` : "") + running.map(card).join("")
+    + (idle.length ? `<div class="grid-sep">생산 중 오더 없음 ${idle.length}곳</div>` : "") + idle.map(card).join("");
+  document.querySelectorAll(".fac").forEach(el => el.onclick = () => go("fac", el.dataset.id));
+})();
+
+/* ── 화면 C: 검토 필요 목록 ── */
+(() => {
+  document.getElementById("qSub").textContent = `${queue.length}건 · 예상 불량 순`;
+  tbl("tQueue", [
+    { h: "오더", f: r => `<b style="font-weight:500">${oid(r)}</b> <span class="sub">${r.prd}</span>` },
+    { h: "공장", f: r => `<span class="rowlink" data-fac="${r.fac}">${facName(r.fac)}</span>` },
+    { h: "상태", f: stChip },
+    { h: "위험", f: r => riskChip(r.risk) },
+    { h: "내부 불량률", n: 1, f: r => `<span class="mono">${pct(r.internal)}</span>` },
+    { h: "예상 유출", n: 1, f: r => `<b class="mono" style="font-weight:500">${fmt(r.ppm)}</b> <span class="sub">PPM</span>` },
+    ...(SITE ? [] : [{ h: "불일치", n: 1, f: gapChip }]),
+    { h: "납기", n: 1, f: r => `<span class="mono">${r.promised.slice(5)}</span>` },
+    { h: "진척", n: 1, f: progText },
+    { h: "어긋난 것 · 확인할 것", f: r => `<div class="why">${whyCell(r)}${r.check ? `<div class="sub">${r.check}</div>` : ""}</div>` },
+  ], [...queue].sort((a, b) => b.ppm - a.ppm), "검토 필요인 진행 중 오더가 없습니다");
+  document.querySelectorAll("#tQueue [data-fac]").forEach(el => el.onclick = () => go("fac", el.dataset.fac));
+})();
+
+/* ── 화면 B: 공장 상세 ── */
+function renderFac(id) {
+  const f = F.find(x => x.id === id); if (!f) return go("grid");
+  const { mine, cur, extra, waiting, done, upcoming } = facState(f);
+  document.getElementById("title").innerHTML = `${facName(id)} <span class="chip prd" style="vertical-align:middle;font-size:12px">${f.prd}</span> ${profChip(f)}${!SITE && f.trustLow ? ` <span class="chip gap">불일치 반복</span>` : ""}${f.region ? ` <span class="sub">${f.region}</span>` : ""}`;
+
+  /* 상단 ① 현재 상황 — 현재 오더 하나 */
+  document.getElementById("cNow").innerHTML = cur ? `
+    <div class="card-h"><div class="card-t">현재 상황</div><div class="card-s">생산 중 오더</div></div>
+    <div class="big">${oid(cur)}<small>${cur.prd} ${fmt(cur.qty)}개 · ${cur.mkt}</small></div>
+    <div style="margin:6px 0 10px;display:flex;gap:6px;flex-wrap:wrap">${cur.act === "review_needed" ? actChip(cur.act) : `<span class="chip act none">검토 필요 아님</span>`}${extra ? `<span class="chip risk high">동시 생산 +${extra} — 전제 위반</span>` : ""}</div>
+    <div class="kv"><span class="k">진척 · 납기 ${cur.promised}</span><span class="v" style="display:flex;align-items:center;gap:8px;min-width:150px">${bar(cur.prog)}${progText(cur)}</span></div>
+    <div class="kv"><span class="k">발주</span><span class="v"><span class="mono">${cur.orderedAt}</span></span></div>
+    <div class="kv"><span class="k">MES 집계 지연 · 누락</span><span class="v">${cur.delay == null ? "—" : cur.delay + "일"} · ${cur.miss ?? 0}회</span></div>
+    <div class="kv"><span class="k">초도품 검사(FAI)</span><span class="v">${cur.faiSub ? `제출 · 최소 여유 <span class="mono">${cur.fai.toFixed(2)}</span>` : `<span class="chip nomes">미제출</span>`}</span></div>
+    <div class="kv"><span class="k">결과 대기 (출하 뒤 입고검사 전)</span><span class="v">${waiting.length}건</span></div>` : `
+    <div class="card-h"><div class="card-t">현재 상황</div><div class="card-s">생산 중 오더 없음</div></div>
+    <div class="big" style="color:var(--faint)">대기</div>
+    <div class="sub" style="margin-top:2px">${upcoming.length ? `다음 발주 ${oid(upcoming[0])} · ${upcoming[0].orderedAt}` : "다음 발주 미정"}</div>
+    <div class="kv" style="margin-top:8px"><span class="k">결과 대기 (출하 뒤 입고검사 전)</span><span class="v">${waiting.length}건</span></div>
+    <div class="kv"><span class="k">마지막 완료</span><span class="v">${done.length ? `${oid(done[0])} · ${done[0].lotRej ? "로트 불합격" : "로트 합격"}` : dash}</span></div>
+    <div class="kv"><span class="k">완료 오더 (채점 구간)</span><span class="v">${done.length}건</span></div>`;
+
+  /* 상단 ② 품질예측 */
+  const cnt = Object.fromEntries(TIERS.map(t => [t, mine.filter(r => r.orderedAt <= TODAY && r.risk === t).length]));
+  const tot = Math.max(Object.values(cnt).reduce((a, b) => a + b, 0), 1);
+  document.getElementById("cPred").innerHTML = `
+    <div class="card-h"><div class="card-t">품질예측</div><div class="card-s">예상 유출 불량 · 고객에게 도달하는 값</div></div>
+    ${cur ? `<div class="big">${fmt(cur.ppm)}<small>PPM · 현재 오더 예상 유출</small></div><div style="margin:4px 0 6px">${riskChip(cur.risk)} <span class="sub">통상 고객 기대 1,000 PPM 이하</span></div>`
+          : `<div class="big" style="color:var(--faint)">—<small>현재 오더 없음</small></div>`}
+    <div class="kv"><span class="k">현재 오더 내부 불량률 (제조 품질)</span><span class="v">${cur ? pct(cur.internal, 2) : dash}</span></div>
+    <div class="kv"><span class="k">이 공장 중앙 · p90</span><span class="v"><span class="mono">${fmt(f.ppmMed)}</span> · <span class="mono">${fmt(f.ppmP90)}</span> PPM</span></div>
+    <div class="tiers" title="채점 구간 오더의 위험 등급 분포">${TIERS.map(t => `<i class="${t}" style="width:${cnt[t] / tot * 100}%"></i>`).join("")}</div>
+    <div class="legend">${TIERS.map(t => `<span><i class="${t}" style="background:var(--risk-${t}-tx)"></i>${RISK[t]} ${cnt[t]}</span>`).join("")}</div>
+    <div class="kv" style="margin-top:8px"><span class="k">완료 오더 실제 로트 불합격</span><span class="v">${done.length ? `${done.filter(r => r.lotRej).length}건 / ${done.length}건` : dash}</span></div>
+    <div class="kv"><span class="k">입고검사 표본 실측</span><span class="v">${f.inspSum ? `${f.inspSum.toLocaleString()}개 중 ${f.rejSum}개` : dash}</span></div>`;
+
+  /* 상단 ③ 제조 · 검수 · 보고 — 공장 파라미터 분해. κ 대신 사람이 읽는 세 값 */
+  const PP = D.params?.pooled || {};
+  const gauge = (v, ref, lo, hi) => `<div class="qbar"><i style="left:${((ref - lo) / (hi - lo) * 100).toFixed(1)}%"></i><b style="left:${(Math.min(Math.max((v - lo) / (hi - lo), 0), 1) * 100).toFixed(1)}%"></b></div>`;
+  const pf = f.profile || {};
+  const nF = (pf.fieldsMes || []).length + (pf.fieldsErp || []).length, mF = (pf.fieldsMesAll || []).length + (pf.fieldsErpAll || []).length;
+  document.getElementById("cKey").innerHTML = `
+    <div class="card-h"><div class="card-t">제조 · 검수 · 보고</div><div class="card-s">입고검사 ${f.paramObs}건으로 추정</div></div>
+    <div class="big">${pct(f.internal, 2)}<small>내부 불량률 · 제조 품질</small></div>
+    ${gauge(f.internal, PP.p ?? f.internal, 0, Math.max(0.12, (PP.p || 0.04) * 3))}
+    <div class="sub">세로선 = 12곳 평균 ${pct(PP.p, 2)} · 오른쪽일수록 공장 안에서 불량이 많이 난다</div>
+    <div class="kv" style="margin-top:10px"><span class="k">검수 품질 · 검출률</span><span class="v">${pct(f.detection)} <span class="sub">평균 ${pct(PP.d)}</span></span></div>
+    ${SITE ? "" : `<div class="kv"><span class="k">보고 정직도 · 보고한 불량 ÷ 물리 증거</span><span class="v">${pct(f.honesty, 0)} <span class="sub">평균 ${pct(PP.b, 0)}</span></span></div>`}
+    <div class="kv"><span class="k">보고 형식</span><span class="v" style="font-weight:400">${PERIOD[pf.period] || "—"} · ${pf.unit === "lot" ? `로트 ${pf.lotSize}개 단위` : "개 단위"} · ${pf.codeScheme === "local" ? "자체 불량코드" : "표준 불량코드"}</span></div>
+    <div class="kv"><span class="k">채우는 선택 필드</span><span class="v">${nF}/${mF} <span class="sub">MES ${(pf.fieldsMes || []).length}/${(pf.fieldsMesAll || []).length} · ERP ${(pf.fieldsErp || []).length}/${(pf.fieldsErpAll || []).length}</span></span></div>
+    <div class="kv"><span class="k">초도품 검사(FAI) 제출률</span><span class="v">${(f.faiRate * 100).toFixed(0)}%</span></div>
+    ${SITE ? "" : `<div class="kv"><span class="k">불일치 평균 (보고 vs 증거)</span><span class="v"><span class="mono">${f.disc > 0 ? "+" : ""}${f.disc.toFixed(2)}</span>${f.trustLow ? ` <span class="chip gap">하위 25%</span>` : ""}</span></div>`}
+    <div class="kv"><span class="k">전체 이력 로트 불합격률</span><span class="v">${(f.histRejRate * 100).toFixed(1)}%</span></div>`;
+
+  /* 하단 좌 ① 왜 이렇게 예측하는가 — 제조 품질 × (1 − 검수 품질) = 유출 */
+  const pInt = cur ? cur.internal : f.internal, dF = f.detection, decomp = pInt * (1 - dF) * 1e6;
+  const outPpm = cur ? cur.ppm : f.ppmMed, outLabel = cur ? `현재 오더 ${oid(cur)}` : "공장 중앙";
+  const repCur = cur && cur.rep != null ? cur.rep : null;
+  document.getElementById("whySub").textContent = "유출 = 공장 안에서 난 불량 × 검수가 놓친 비율";
+  document.getElementById("why").innerHTML = `<div class="formula">
+      <div class="fbox"><div class="fl">① 제조 품질 — 내부 불량률${cur ? " (현재 오더)" : " (공장)"}</div><div class="fv">${pct(pInt, 2)}</div><div class="fd">${repCur != null ? `MES 보고 ${pct(repCur, 2)} 을 보고 정직도 ${pct(f.honesty, 0)} 로 되돌리고 공장 수준으로 당긴 값` : "ERP·Cell 물리 폐기와 우리 입고검사로 잡은 공장 수준"}</div></div>
+      <div class="fop">×</div>
+      <div class="fbox"><div class="fl">② 검수가 놓치는 비율 = 1 − 검출률</div><div class="fv">${pct(1 - dF, 2)}</div><div class="fd">검출률 ${pct(dF)} · 12곳 평균 ${pct(PP.d)} · 입고검사 ${f.paramObs}건으로 추정</div></div>
+      <div class="fop">=</div>
+      <div class="fbox out"><div class="fl">예상 유출 불량 · ${outLabel}</div><div class="fv">${fmt(outPpm)} PPM</div><div class="fd">고객에게 도달하는 값 (2단 모델). 분해식 그대로 곱하면 ${fmt(decomp)} PPM</div></div>
+    </div>`;
+  document.getElementById("whyNote").innerHTML =
+    `<b>제조 품질</b>은 ERP 자재 소진 − Cell 카운터로 나온 <b>물리적 폐기</b>를 폐기 비중 가정(11.5%)으로 되돌려 잡은 불량을 추정하고, 우리 입고검사가 잡은 유출을 더한 값이다.
+     <b>검수 품질</b>은 그 잡은 불량 ÷ (잡은 + 유출). <b>보고 정직도</b>는 MES 가 보고한 잡은 불량 ÷ 물리 증거 — ${f.honesty < 0.85 ? "이 공장은 잡은 불량의 일부만 보고한다." : f.honesty > 1.1 ? "이 공장은 보고가 물리 증거보다 많다 — 재작업 판정이 넓거나 단위가 다르다." : "이 공장 보고는 물리 증거와 대체로 맞는다."}
+     유출 라벨이 희소해 검출률의 공장 간 순위 정밀도는 낮다(합성 검증 ρ≈0.5). 제조 품질 순위는 높다(ρ≈0.9).`;
+
+  /* 하단 좌 ② 이상의 근거 — 현재 오더 하나 */
+  const evEl = document.getElementById("ev"), RT = D.reasonText || {};
+  if (!cur) {
+    document.getElementById("evSub").textContent = "생산 중 오더 없음";
+    evEl.innerHTML = `<div class="empty">지금 생산 중인 오더가 없어 대조할 것이 없습니다</div>`;
+  } else {
+    document.getElementById("evSub").innerHTML = `${oid(cur)} · ${cur.act === "review_needed" ? "검토 필요" : "검토 대상 아님"}`;
+    const fired = cur.reasons || [];
+    const codes = Object.keys(RT);
+    evEl.innerHTML = `
+      <div class="kv"><span class="k">권고</span><span class="v">${actChip(cur.act)}${cur.why ? ` <span class="sub">${cur.why}</span>` : ""}</span></div>
+      <div class="kv"><span class="k">확인할 것</span><span class="v" style="font-weight:400">${cur.check || dash}</span></div>
+      ${SITE ? "" : `<div class="kv"><span class="k">MES 보고 불량률 → 정직도 보정 후</span><span class="v">${cur.rep == null ? `<span class="sub">미보고</span>` : `<span class="mono">${pct(cur.rep, 2)}</span> → <span class="mono">${pct(cur.internal, 2)}</span>`}</span></div>
+      <div class="kv"><span class="k">불일치 (증거가 예상한 보고 − 실제 보고)</span><span class="v">${gapChip(cur)}</span></div>`}
+      ${!SITE ? `<div class="sub" style="margin:12px 0 8px">교차검증 짝 — MES 자기신고를 ERP·CellOS·포지 기록의 증거와 짝지어 대조. 보라 = 학습 구간 상위 15% 초과</div>
+      <div class="evid">${codes.filter(c => c !== "no_evidence").map(c => `<div class="reason ${fired.includes(c) ? "fired" : ""}"><div class="t">${RT[c].t}</div><div class="c">${fired.includes(c) ? "확인할 것 · " + RT[c].c : "정상 범위"}</div></div>`).join("")}
+      ${fired.includes("no_evidence") ? `<div class="reason fired"><div class="t">${RT.no_evidence.t}</div><div class="c">확인할 것 · ${RT.no_evidence.c}</div></div>` : ""}</div>` : ""}`;
+  }
+  document.getElementById("evNote").innerHTML = SITE
+    ? `기록이 채워지면 평가가 과거 실적 쪽으로 덜 기울고 그만큼 덜 보수적으로 매겨진다 — 초도품 검사 제출, MES 집계 누락·지연이 그 항목이다.`
+    : `<b>한 오더의 불일치는 노이즈이고 같은 공장에서 반복되면 습관이다</b> — 공장 단위 판단은 누적으로 내린다(불일치 평균 · 하위 25% · 보고 정직도).
+       사유별 「확인할 것」은 검토가 탐색이 아니라 검증이 되게 하기 위한 것이다.`;
+
+  /* 하단 좌 ③ 결과 대기 · 최근 완료 */
+  const hist = [...waiting.sort((a, b) => b.orderedAt.localeCompare(a.orderedAt)), ...done].slice(0, 10);
+  document.getElementById("histSub").textContent = `결과 대기 ${waiting.length}건 · 완료 ${done.length}건 · 최근 10건`;
+  tbl("tHist", [
+    { h: "오더", f: r => `<b style="font-weight:500">${oid(r)}</b> <span class="sub">${r.orderedAt.slice(5)} 발주</span>` },
+    { h: "상태", f: stChip },
+    { h: "예측", n: 1, f: r => `<span class="mono">${fmt(r.ppm)}</span> <span class="sub">PPM</span>` },
+    { h: "위험", f: r => riskChip(r.risk) },
+    { h: "권고했던 것", f: r => actChip(r.act) },
+    ...(SITE ? [] : [{ h: "불일치", n: 1, f: gapChip }]),
+    { h: "실제 결과", f: r => !r.late ? `<span class="sub">입고검사 대기</span>` : `<span class="mono">${r.insp}개 중 ${r.rej}</span> · ${r.lotRej ? `<span class="chip risk critical">로트 불합격</span>` : `<span class="chip st">로트 합격</span>`}` },
+  ], hist, "결과 대기·완료 오더가 없습니다");
+
+  /* 하단 우 — 일자별 로그 */
+  const ev = LOG[id] || [];
+  const days = []; const byDay = {};
+  for (const e of ev) { if (!byDay[e.d]) { byDay[e.d] = []; days.push(e.d); } byDay[e.d].push(e); }
+  if (!byDay[TODAY]) { byDay[TODAY] = []; days.unshift(TODAY); days.sort().reverse(); }
+  byDay[TODAY].unshift({ d: TODAY, o: "", k: "score", t: `채점 실행 — 라벨 도착 오더로 κ 갱신${cur ? ` · 현재 오더 ${oid(cur)} 채점` : ""}${D.runId ? ` · ${D.runId}` : ""}` });
+  const ct = ev.reduce((m, e) => (m[e.k] = (m[e.k] || 0) + 1, m), {});
+  document.getElementById("logSub").innerHTML = `${days.length}일 · MES ${ct.report || 0}${ct.missing ? ` (누락 ${ct.missing})` : ""}${ct.erp_missing ? ` · ERP 누락 ${ct.erp_missing}` : ""} · FAI ${ct.fai || 0} · 입고 결과 ${ct.label || 0}`;
+  const dayHtml = d => `<div class="ev-day ${d === TODAY ? "today" : ""}"><span class="d">${d}${d === TODAY ? " · 오늘" : ""}</span><span class="cnt">${byDay[d].length}건</span></div>`
+    + byDay[d].map(e => `<div class="ev ${e.k}"><span class="dot"></span><span class="o">${e.o}</span><span>${e.t}</span></div>`).join("");
+  const SHOW = 10;
+  document.getElementById("log").innerHTML = days.slice(0, SHOW).map(dayHtml).join("")
+    + (days.length > SHOW ? `<details><summary>이전 ${days.length - SHOW}일 더 보기</summary>${days.slice(SHOW).map(dayHtml).join("")}</details>` : "")
+    + (!ev.length ? `<div class="empty">채점 구간에 이 공장의 기록이 없습니다</div>` : "");
+}
+
+/* 첫 화면 — #fac_kr_01 처럼 해시가 있으면 그 공장으로 */
+const h = location.hash.replace("#", "");
+if (h && F.some(f => f.id === h)) go("fac", h); else if (SITE && F.length === 1) go("fac", F[0].id); else go("grid");
+})();
+</script>

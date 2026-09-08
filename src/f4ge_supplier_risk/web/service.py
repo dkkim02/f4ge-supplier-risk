@@ -5,7 +5,8 @@
   POST /api/score/run                채점 실행 (admin)
   GET  /api/dashboard                최신 채점의 화면 JSON — site 는 자기 공장만 (admin·site)
   GET  /api/scores                   최신 채점 행 (admin·site)
-  GET  /                             관제 화면. 데이터는 /api/dashboard 에서 fetch
+  GET  /                             공장 관제(그리드 → 공장 상세). 데이터는 /api/dashboard 에서 fetch
+  GET  /classic                      09-07 관제 화면(표·매트릭스). 같은 데이터
 """
 
 from __future__ import annotations
@@ -99,8 +100,11 @@ def create_app(eng: Engine) -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def index() -> HTMLResponse:
-        html = (STATIC / "관제.html").read_text().replace("__DATA__", "__LIVE__")
-        return HTMLResponse(html)
+        return HTMLResponse((STATIC / "공장관제.html").read_text().replace("__DATA__", "__LIVE__"))
+
+    @app.get("/classic", include_in_schema=False)
+    def classic() -> HTMLResponse:
+        return HTMLResponse((STATIC / "관제.html").read_text().replace("__DATA__", "__LIVE__"))
 
     return app
 
@@ -123,13 +127,17 @@ def seed_from_generated(eng: Engine, data: dict[str, list[dict[str, Any]]]) -> d
         "product_code")
     db.upsert_master(eng, db.factories, [
         {"factory_id": f["factory_id"], "product_code": f["product_id"].removeprefix("prd_"),
-         "has_mes": bool(f["has_mes"]), "label": f["factory_id"]} for f in data["factories"]], "factory_id")
+         "has_mes": True, "label": f["factory_id"],
+         # 보고 프로필 — 네 소스는 전부 오고, 차이는 형식·채우는 필드다
+         "profile": json.dumps({k: f[k] for k in ("mes_period", "qty_unit", "lot_size", "defect_code_scheme", "fields_mes", "fields_erp")})}
+        for f in data["factories"]], "factory_id")
     counts = {
         "supplier-order.v1": db.upsert_rows(eng, "supplier-order.v1", [contracts.order_row(o) for o in data["orders"]]),
         "factory-report.v1": db.upsert_rows(eng, "factory-report.v1",
                                             [contracts.report_row(r, fac_of[r["order_id"]]) for r in data["factory_reports"]]),
         "fai-report.v1": db.upsert_rows(eng, "fai-report.v1", [contracts.fai_row(f, fac_of[f["order_id"]]) for f in data["fai_reports"]]),
         "cell-daily.v1": db.upsert_rows(eng, "cell-daily.v1", [contracts.cell_row(c, fac_of[c["order_id"]]) for c in data["cell_daily"]]),
+        "erp-daily.v1": db.upsert_rows(eng, "erp-daily.v1", [contracts.erp_row(e, fac_of[e["order_id"]]) for e in data.get("erp_daily", [])]),
         "order-quality-outcome.v1": db.upsert_rows(eng, "order-quality-outcome.v1",
                                                    [contracts.outcome_row(q, fac_of[q["order_id"]]) for q in data["quality_outcomes"]]),
     }

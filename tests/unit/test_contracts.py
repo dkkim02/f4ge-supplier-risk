@@ -35,12 +35,21 @@ def test_order_contract(dataset):
 
 def test_factory_report_contract(dataset, fac_of):
     rows = [contracts.report_row(r, fac_of[r["order_id"]]) for r in dataset["factory_reports"]]
-    assert rows, "MES 공장이 없으면 보고가 0건이다 — 유형 a 가 최소 1곳이어야 한다"
+    assert rows
     _check("factory-report.v1", rows)
     # 결측 행은 수량을 갖지 않는다 — 계약의 if/then 이 실제로 막는지 역방향으로 확인
     v = _validator("factory-report.v1")
     missing = next(r for r in rows if r["is_missing"])
     assert list(v.iter_errors({**missing, "produced_quantity": 1}))
+
+
+def test_erp_daily_contract(dataset, fac_of):
+    rows = [contracts.erp_row(e, fac_of[e["order_id"]]) for e in dataset["erp_daily"]]
+    assert rows
+    _check("erp-daily.v1", rows)
+    v = _validator("erp-daily.v1")
+    missing = next(r for r in rows if r["is_missing"])
+    assert list(v.iter_errors({**missing, "material_issued_quantity": 1.0}))
 
 
 def test_fai_contract(dataset, fac_of):

@@ -62,7 +62,8 @@ def order_latents(
 
     # 납기 여유가 평소보다 적으면 서두름 → 불량. **중심화가 중요하다** —
     # 원값을 그대로 쓰면 상수항이 logit 전체를 밀어서 목표 불량률을 놓친다.
-    pressure = -(order["lead_slack"] - cfg["order"]["lead_slack_mean"]) + 0.15 * order["load_index"]
+    # 한 공장에 한 오더(09-08 저녁 전제)라 동시 부하 항은 없다. 압박은 납기 여유 하나에서 온다.
+    pressure = -(order["lead_slack"] - cfg["order"]["lead_slack_mean"])
     material = material_lot_effect(cfg, order["material_lot_id"])
     noise = float(rng.normal(0.0, 1.0))
 

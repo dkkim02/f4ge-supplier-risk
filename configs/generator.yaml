@@ -4,26 +4,26 @@
 
 seed: 20260907
 
-# 공장 유형 — 계측 수준이 공장마다 다르다. 이 이질성이 이 프로젝트의 난이도이자
-# 설치 가치를 측정할 수 있게 하는 구조다(2026-09-08 확정).
-#   type_a  MES 보유 + CellOS/FactoryOS 설치  -> 생산·불량 + 설비 신호 전부
-#   type_b  설치만 (MES 없음)                 -> 설비 신호 + FactoryOS 가 입력 경로
-#   type_c  아무것도 없음                     -> L0 만
-# 09-08 저녁 확정 — CellOS·FactoryOS 는 협력 조건이라 12곳 전부 설치돼 있다. 설비 신호(L2)는 항상 온다.
-# 차이는 생산·불량 데이터가 흐르는가: 자체 MES 를 FactoryOS 에 연동한 공장(a)만 온다. 나머지(b)는 설비 신호만.
-# "없음"(c)은 존재하지 않는다 — 0 으로 두되 키는 남긴다(sweep 스크립트가 쓴다).
-factory_types:
-  a: 3
-  b: 9
-  c: 0
+# 소스 — FactoryOS 에는 MES · CellOS · ERP · 포지 기록 네 곳에서 데이터가 들어온다(2026-09-08 저녁, 사용자 확정).
+# 12곳 전부 네 소스가 온다. 공장 유형(연동/미연동) 구분은 폐기했다.
+# 차이는 **보고 품질** 4축이다 — 편향(assumptions) · 성실도(discipline) · 채우는 필드 · 형식(주기·단위·코드).
+reporting_profile:
+  mes_period_mix: { daily: 0.6, shift: 0.25, weekly: 0.15 }   # MES 집계 주기. shift = 하루 2회, weekly = 7일
+  qty_unit_lot_share: 0.3          # 수량을 로트 단위로 찍는 공장 비율 (생산 수량이 로트 배수로 내림된다)
+  lot_sizes: [25, 50, 100]
+  local_defect_code_share: 0.4     # 자체 불량코드 체계를 쓰는 공장 비율. FactoryOS 가 표준 코드로 정규화한다
+  field_availability:              # 선택 필드를 채우는 공장 비율. 필수 필드(생산·폐기·재작업 / 자재)는 전부 온다
+    mes: { inspected_qty: 0.75, defect_type: 0.7, machine_id: 0.6 }
+    erp: { overtime_hours: 0.7, headcount: 0.7, wip_qty: 0.6, outsourcing: 0.65 }
+  erp_discipline_range: [0.6, 0.98]   # ERP 일 마감 성실도. 회계라 MES 보다 높다
 
 scale:
   factories: 12            # 제품군 4종 x 3곳 (= a+b+c)
   products: 4
-  months: 36               # 현실 규모(18개월/450건)로는 평가 불가 — 명세 §6
-  orders_per_month: 25
-  # MES/Cell 은 API 로 온다. 사람이 채우는 주간 보고가 아니다.
-  mes_interval_days: 1     # 일 단위 집계
+  months: 36               # 36개월. 한 공장이 한 번에 한 오더만 돌므로(09-08 저녁 전제) 오더 수는 기간 ÷ (리드 + 간격) ≈ 300건
+  order_gap_days: [0, 5]   # 이전 오더 약속 납기 → 다음 발주까지
+  # MES/Cell/ERP 는 API 로 온다. 사람이 채우는 주간 보고가 아니다.
+  mes_interval_days: 1     # 기본 집계 주기(일). 공장별 실제 주기는 reporting_profile.mes_period_mix
   fai_per_order: 1         # 오더당 1회. 고객 요구사항이라 유형과 무관하게 제출된다
 
 order:

@@ -50,18 +50,11 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
     n_fac = cfg["scale"]["factories"]
     per_product = n_fac // len(products)
 
-    # 공장 유형. 계측 수준이 공장마다 다르다.
-    #   a  생산·불량 + 설비 신호 (MES 보유 또는 FactoryOS 입력 + CellOS)
-    #   b  설비 신호만 (CellOS 만 설치, 생산·불량 입력 경로 없음)
-    #   c  아무것도 없음 — L0 만
-    ft = cfg["factory_types"]
-    pool = ["a"] * ft["a"] + ["b"] * ft["b"] + ["c"] * ft["c"]
-    # 제품군을 가로질러 나눠준다. 한 제품군의 세 곳이 전부 같은 유형이면
-    # "같은 제품 안에서 유형을 비교" 하는 것이 불가능해진다.
-    n_group = n_fac // per_product  # 제품군 수
-    types = [""] * n_fac
-    for j, t in enumerate(pool):
-        types[(j % n_group) * per_product + (j // n_group)] = t
+    # 보고 프로필 — 12곳 전부 네 소스(MES·CellOS·ERP·포지 기록)가 온다. 차이는 보고 품질 4축.
+    rp = cfg["reporting_profile"]
+    periods = list(rp["mes_period_mix"])
+    period_p = [rp["mes_period_mix"][k] for k in periods]
+    interval_of = {"daily": 1.0, "shift": 0.5, "weekly": 7.0}
 
     out = []
     for idx in range(n_fac):
@@ -107,11 +100,20 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
                 ),
                 "bias_sensitivity": float(rng.uniform(0.0, 2.0 * a["bias_sensitivity"])),
                 "report_discipline": float(rng.uniform(disc_lo, disc_hi)),
-                "factory_type": types[idx],
-                "has_mes": types[idx] == "a",  # 자체 MES 가 FactoryOS 에 연동돼 생산·불량 정보가 오는가
-                "has_cell": types[idx] in ("a", "b"),  # 설비 신호. CellOS 는 협력 조건이라 실제로는 전부 True (c 는 0곳)
+                # 네 소스 전부 온다 — 호환용 상수. 유형 구분은 09-08 저녁 폐기.
+                "has_mes": True,
+                "has_cell": True,
                 # MES 입력 단계의 편향. 폐기·재작업 판정은 사람이 하므로 남는다.
                 "mes_input_bias": float(rng.uniform(*a["mes_input_bias_range"])),
+                # ── 보고 프로필: 형식 · 필드 가용 · ERP 성실도 ──
+                "mes_period": (period := periods[int(rng.choice(len(periods), p=period_p))]),
+                "mes_interval_days": interval_of[period],
+                "qty_unit": "lot" if rng.random() < rp["qty_unit_lot_share"] else "each",
+                "lot_size": int(rng.choice(rp["lot_sizes"])),
+                "defect_code_scheme": "local" if rng.random() < rp["local_defect_code_share"] else "std",
+                "fields_mes": {k: bool(rng.random() < v) for k, v in rp["field_availability"]["mes"].items()},
+                "fields_erp": {k: bool(rng.random() < v) for k, v in rp["field_availability"]["erp"].items()},
+                "erp_discipline": float(rng.uniform(*rp["erp_discipline_range"])),
             }
         )
     return out

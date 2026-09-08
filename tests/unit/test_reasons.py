@@ -17,11 +17,12 @@ from f4ge_supplier_risk.models import discrepancy
 
 # (짝 관측치, 메커니즘, 부호가 음수여야 하는가)
 _PAIRS = (
-    ("l1_material_gap", "mech_inflation_max", False),
-    ("l1_ot_vs_reject", "mech_shrink_min", True),
+    ("l3_material_gap", "mech_inflation_max", False),  # MES 수량 vs ERP 자재 소진
+    ("l3_ot_vs_reject", "mech_shrink_min", True),  # MES 불량 vs ERP 잔업
     ("l1_pace_gap", "mech_promise_stale_days", False),
     ("l1_silent_delay", "mech_issue_suppressed", False),
     ("l1_photo_stale", "mech_photo_reused", False),
+    ("l3_wip_gap", "mech_inflation_max", False),  # MES 수량 vs ERP 재공·완성품
 )
 
 
@@ -37,12 +38,12 @@ def test_pair_tracks_its_mechanism(table, truth_map, col, mech, negative):
 def test_no_evidence_covers_the_unverifiable(table):
     """짝을 하나도 확인할 수 없는 오더에는 `no_evidence` 가 붙어야 한다.
 
-    이걸 안 넣으면 사유 없는 현장 방문이 3분의 1 남는다 — 그리고 "대조할 게
+    이걸 안 넣으면 사유 없는 검토 필요가 3분의 1 남는다 — 그리고 "대조할 게
     없다" 는 것은 "괜찮다" 가 아니다.
     """
     tr, te = split_by_time(table)
     rs = discrepancy.reasons(tr, te)
-    blind = te["l1_material_gap"].isna() & te["l1_photo_stale"].isna()
+    blind = te["l3_material_gap"].isna() & te["l3_wip_gap"].isna() & te["l1_photo_stale"].isna()
     if blind.any():
         got = rs.loc[blind.to_numpy(), "reason_primary"]
         assert (got == discrepancy.NO_EVIDENCE[0]).any()

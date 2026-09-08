@@ -43,6 +43,8 @@ factories = sa.Table(
     sa.Column("label", sa.String(64)),
     sa.Column("product_code", sa.String(32)),
     sa.Column("has_mes", sa.Boolean, nullable=False, default=False),  # 자체 MES → FactoryOS 연동
+    sa.Column("region", sa.String(64)),  # 위치(공장 카드에 표시). 없으면 표시하지 않는다
+    sa.Column("profile", sa.Text),  # 보고 프로필 JSON — 집계 주기·수량 단위·불량코드 체계·채우는 필드 (09-08 저녁)
 )
 
 
@@ -61,11 +63,13 @@ orders = _contract_table("orders", sa.Column("ordered_at", sa.String(32), nullab
 factory_reports = _contract_table("factory_reports", sa.Column("seq", sa.Integer, nullable=False))
 fai_reports = _contract_table("fai_reports")
 cell_daily = _contract_table("cell_daily", sa.Column("day_index", sa.Integer, nullable=False))
+erp_daily = _contract_table("erp_daily", sa.Column("day_index", sa.Integer, nullable=False))
 quality_outcomes = _contract_table("quality_outcomes", sa.Column("label_available_at", sa.String(32)))
 sa.Index("ix_orders_pk", orders.c.order_id, unique=True)
 sa.Index("ix_reports_pk", factory_reports.c.order_id, factory_reports.c.seq, unique=True)
 sa.Index("ix_fai_pk", fai_reports.c.order_id, unique=True)
 sa.Index("ix_cell_pk", cell_daily.c.order_id, cell_daily.c.day_index, unique=True)
+sa.Index("ix_erp_pk", erp_daily.c.order_id, erp_daily.c.day_index, unique=True)
 sa.Index("ix_outcome_pk", quality_outcomes.c.order_id, unique=True)
 
 scores = sa.Table(
@@ -86,7 +90,7 @@ score_runs = sa.Table(
 
 CONTRACT_TABLES = {
     "supplier-order.v1": orders, "factory-report.v1": factory_reports, "fai-report.v1": fai_reports,
-    "cell-daily.v1": cell_daily, "order-quality-outcome.v1": quality_outcomes,
+    "cell-daily.v1": cell_daily, "erp-daily.v1": erp_daily, "order-quality-outcome.v1": quality_outcomes,
 }
 
 
@@ -99,7 +103,18 @@ def connect(url: str = DEFAULT_URL) -> Engine:
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
     eng = sa.create_engine(url, future=True)
     meta.create_all(eng)
+    _migrate(eng)
     return eng
+
+
+def _migrate(eng: Engine) -> None:
+    """create_all 은 기존 표에 열을 더하지 않는다. 09-08 저녁 이전 DB 에 `factories.region` 을 붙인다."""
+    with eng.begin() as cx:
+        cols = {r[1] for r in cx.exec_driver_sql("PRAGMA table_info(factories)")} if eng.dialect.name == "sqlite" else None
+        if cols is not None and "region" not in cols:
+            cx.exec_driver_sql("ALTER TABLE factories ADD COLUMN region VARCHAR(64)")
+        if cols is not None and "profile" not in cols:
+            cx.exec_driver_sql("ALTER TABLE factories ADD COLUMN profile TEXT")
 
 
 def _extra_cols(name: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -107,7 +122,7 @@ def _extra_cols(name: str, row: dict[str, Any]) -> dict[str, Any]:
         return {"ordered_at": row["ordered_at"]}
     if name == "factory-report.v1":
         return {"seq": int(row["seq"])}
-    if name == "cell-daily.v1":
+    if name in ("cell-daily.v1", "erp-daily.v1"):
         return {"day_index": int(row["day_index"])}
     if name == "order-quality-outcome.v1":
         return {"label_available_at": row.get("label_available_at")}

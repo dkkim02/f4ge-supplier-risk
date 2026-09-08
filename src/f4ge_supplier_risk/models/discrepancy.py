@@ -18,7 +18,7 @@
 
     불일치 = log(증거가 예상한 보고) - log(실제 보고)
 
-양수면 "증거는 나쁘다는데 보고는 괜찮다고 한다" — 전화·방문 트리거다.
+양수면 "증거는 나쁘다는데 보고는 괜찮다고 한다" — 검토 필요 트리거다.
 
 **정답값을 쓰지 않는다.** `true_gap` 은 평가에만 쓰고 모델에는 들어가지 않는다.
 실데이터에서 영원히 알 수 없는 값이기 때문이다.
@@ -76,15 +76,18 @@ HARD_COLS = (
     "l0m_blank",
     "l0m_promise_changes",
     "l0m_promise_change_late",
-    "l1_material_gap",
-    "l1_overtime_mean",
+    "l3_material_gap",  # ERP 자재 소진 vs MES 수량
+    "l3_wip_gap",  # ERP 재공·완성품 vs MES 수량
+    "l3_overtime_mean",  # ERP 근태
+    "l3_phys_scrap_rate",  # ERP 소진 − Cell 카운터 = 물리적 폐기
+    "l2_anomaly_rate",  # CellOS 이상 이벤트
     "l1_fai_margin_min",
     "l1_fai_out_of_tol",
     "l1_fai_submitted",
 )
 
 # 난이도 보정. 큰 오더가 원래 불량이 많은 것을 "숨긴다"고 읽으면 안 된다.
-CONTEXT_COLS = ("l0_log_qty", "l0_lead_slack", "l0_load_index")
+CONTEXT_COLS = ("l0_log_qty", "l0_lead_slack")  # 09-08 저녁: 한 공장 한 오더 전제라 load_index 없음
 
 _EPS = 5e-4
 
@@ -115,18 +118,18 @@ def fit_predict(train: pd.DataFrame, test: pd.DataFrame) -> np.ndarray:
 # 교차검증 짝마다 통계를 따로 두고, 어느 짝이 어긋났는지를 낸다.
 # 다섯 짝 전부 **값이 클수록 의심스럽다** — 방향을 통일해 두면 threshold를 하나로 쓴다.
 #
-# `확인할 것` 이 이 분해의 목적이다. 현장 방문이 탐색이 아니라 검증이 되어야 한다.
+# `확인할 것` 이 이 분해의 목적이다. 검토가 탐색이 아니라 검증이 되어야 한다.
 REASONS: tuple[tuple[str, str, str, str], ...] = (
     (
         "qty_inflation",
-        "l1_material_gap",
-        "보고 수량이 자재 소진량과 맞지 않는다",
-        "재공품 실사 · 자재 입출고 대장",
+        "l3_material_gap",
+        "MES 보고 수량이 ERP 자재 소진량과 맞지 않는다",
+        "재공품 실사 · ERP 자재 입출고 대조",
     ),
     (
         "defect_hiding",
-        "l1_ot_vs_reject",
-        "불량은 적다는데 잔업이 많다",
+        "l3_ot_vs_reject",
+        "불량은 적다는데 잔업(ERP 근태)이 많다",
         "재작업 대장 · 특별공정 기록",
     ),
     (
@@ -147,15 +150,23 @@ REASONS: tuple[tuple[str, str, str, str], ...] = (
         "보낸 사진이 그 주에 찍힌 것이 아니다",
         "현장 사진 즉석 촬영 요청",
     ),
+    (
+        "wip_mismatch",
+        "l3_wip_gap",
+        "MES 보고 수량이 ERP 재공·완성품 재고와 맞지 않는다",
+        "재공 실사 · ERP 재고 대조",
+    ),
 )
+# 물리적 증거 짝 — 이 중 하나도 확인할 수 없으면 `no_evidence`
+_PHYSICAL = ("qty_inflation", "wip_mismatch", "stale_evidence")
 
 # 여섯 번째 사유는 짝이 없다. **대조할 것이 하나도 없다는 것 자체가 사유다** —
 # T2 를 안 낸 공장은 우리가 검증할 수단이 없다는 뜻이고, 그건 "괜찮다" 가 아니다.
-# 이걸 넣지 않으면 사유 없는 현장 방문이 3분의 1 남는다.
+# 이걸 넣지 않으면 사유 없는 검토 필요가 3분의 1 남는다.
 NO_EVIDENCE = (
     "no_evidence",
-    "대조할 증거가 하나도 없다 — 자재·검사·사진 기록을 받지 못했다",
-    "T2 항목 제출 요구 · 자재 입출고와 검사 기록 확보",
+    "대조할 물리적 증거가 없다 — ERP 자재·재공, 현장 사진을 받지 못했다",
+    "ERP 자재·재공 필드 연동 요구 · 현장 사진 확보",
 )
 
 # 학습 구간 분포의 이 분위를 넘으면 그 짝이 어긋난 것으로 본다.
@@ -180,20 +191,20 @@ def reasons(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
 
     for _, row in test.iterrows():
         fired, best, best_pct = [], None, 0.0
-        checkable = 0
+        physical_checkable = 0
         for code, col, _, _ in REASONS:
             x = row[col]
             if x is None or (isinstance(x, float) and np.isnan(x)):
                 continue
-            checkable += 1
+            if code in _PHYSICAL:
+                physical_checkable += 1
             pct = float(np.searchsorted(ranks[code], x) / max(len(ranks[code]), 1))
             if x >= cuts[code]:
                 fired.append(code)
                 if pct > best_pct:
                     best, best_pct = code, pct
-        # 물리적 증거 쪽 짝을 하나도 확인할 수 없으면 그것이 사유다.
-        # (③④ 는 T2 없이도 계산되므로 "증거 없음" 판정에서 제외한다)
-        if best is None and checkable <= 2:
+        # 물리적 증거 짝(자재·재공·사진)을 하나도 확인할 수 없으면 그것이 사유다.
+        if best is None and physical_checkable == 0:
             best = NO_EVIDENCE[0]
             fired = fired + [NO_EVIDENCE[0]]
         out["reason_primary"].append(best)

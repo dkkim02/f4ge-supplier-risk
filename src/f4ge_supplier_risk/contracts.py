@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 TENANT = "ten_f4ge"  # 생성기는 단일 테넌트다. 실서비스에서는 수신 측이 채운다.
+# 자체 불량코드 → 표준 코드. FactoryOS 가 수집 시 정규화한다(공장별 형식 차이는 계약 밖에서 흡수).
+_DEFECT_CODE_TO_STD = {"DIM": "dimension", "SRF": "surface", "FNC": "function", "MAT": "material", "ETC": "other"}
 
 
 def _drop_none(d: dict[str, Any]) -> dict[str, Any]:
@@ -27,26 +29,48 @@ def order_row(o: dict[str, Any]) -> dict[str, Any]:
     })
 
 
-def report_row(r: dict[str, Any], factory_id: str, source: str = "mes_api") -> dict[str, Any]:
+def report_row(r: dict[str, Any], factory_id: str) -> dict[str, Any]:
+    """MES 일 집계 → 계약 행. 자재·인원·잔업은 09-08 저녁부터 erp-daily.v1 로 간다."""
     base = {
         "schema_version": "supplier_risk.factory_report.v1", "tenant_id": TENANT,
         "order_id": r["order_id"], "factory_id": factory_id, "seq": int(r["seq"]),
-        "due_at": r["due_at"], "is_missing": bool(r["is_missing"]), "source": source,
+        "due_at": r["due_at"], "is_missing": bool(r["is_missing"]), "source": "mes",
         "reported_at": r.get("reported_at"),
     }
     if r["is_missing"]:
         return base
+    dt = r.get("defect_type")
     return _drop_none({
         **base,
+        "period": r.get("period", "daily"),
         "produced_quantity": int(r["produced_qty"]), "scrap_quantity": int(r["scrap_qty"]),
         "rework_quantity": int(r["rework_qty"]), "stage": r["stage"],
         "promised_date_reported": r["promised_date_reported"], "issue_flag": bool(r["issue_flag"]),
         "inspected_quantity": r.get("inspected_qty"), "inspection_type": r.get("inspection_type"),
-        "reject_quantity": r.get("reject_qty"), "defect_type": r.get("defect_type"),
-        "material_lot_id": r.get("material_lot_id"), "material_supplier": r.get("material_supplier"),
-        "material_consumed_quantity": r.get("material_consumed_qty"),
-        "machine_id": r.get("machine_id"), "shift": r.get("shift"), "operator_count": r.get("operator_count"),
-        "overtime_hours": r.get("overtime_hours"), "photo_taken_at": r.get("photo_taken_at"),
+        "reject_quantity": r.get("reject_qty"), "defect_type": _DEFECT_CODE_TO_STD.get(dt, dt),
+        "material_lot_id": r.get("material_lot_id"),
+        "machine_id": r.get("machine_id"), "shift": r.get("shift"), "photo_taken_at": r.get("photo_taken_at"),
+    })
+
+
+def erp_row(e: dict[str, Any], factory_id: str) -> dict[str, Any]:
+    """ERP 일 스냅샷 → 계약 행. 자재 입출고·재고 · 재공/공정별 재고 · 인원·잔업 · 외주 발주/입고."""
+    base = {
+        "schema_version": "supplier_risk.erp_daily.v1", "tenant_id": TENANT,
+        "order_id": e["order_id"], "factory_id": factory_id, "day_index": int(e["day_index"]),
+        "due_at": e["due_at"], "is_missing": bool(e["is_missing"]), "reported_at": e.get("reported_at"),
+    }
+    if e["is_missing"]:
+        return base
+    return _drop_none({
+        **base,
+        "material_issued_quantity": e["material_issued_qty"], "material_on_hand_quantity": e["material_on_hand_qty"],
+        "material_lot_id": e.get("material_lot_id"),
+        "wip_quantity": e.get("wip_qty"), "wip_machining_quantity": e.get("wip_machining_qty"),
+        "wip_finishing_quantity": e.get("wip_finishing_qty"), "wip_inspection_quantity": e.get("wip_inspection_qty"),
+        "finished_goods_quantity": e.get("finished_goods_qty"),
+        "headcount": e.get("headcount"), "overtime_hours": e.get("overtime_hours"),
+        "outsourcing_po_quantity": e.get("outsourcing_po_qty"), "outsourcing_received_quantity": e.get("outsourcing_received_qty"),
     })
 
 

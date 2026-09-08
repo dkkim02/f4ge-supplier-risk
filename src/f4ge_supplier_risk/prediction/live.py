@@ -15,7 +15,7 @@ from sqlalchemy.engine import Engine
 
 from f4ge_supplier_risk.features.build import LAYERS, build
 from f4ge_supplier_risk.ingestion import derive
-from f4ge_supplier_risk.models import discrepancy, two_stage
+from f4ge_supplier_risk.models import discrepancy, factory_params, two_stage
 from f4ge_supplier_risk.prediction.run import _predict
 from f4ge_supplier_risk.prediction.score import build_scores, to_contract
 from f4ge_supplier_risk.web import db
@@ -25,16 +25,18 @@ MIN_LABELED = 40  # 이보다 적으면 κ·threshold 가 서지 않는다
 
 
 def assemble(eng: Engine) -> dict[str, list[dict[str, Any]]]:
-    facs = [
-        {"factory_id": f["factory_id"], "product_id": f"prd_{f['product_code']}" if f.get("product_code") else "",
-         "factory_type": "a" if f["has_mes"] else "b", "has_mes": bool(f["has_mes"]), "has_cell": True}
-        for f in db.load_factories(eng)
-    ]
+    import json
+
+    facs = []
+    for f in db.load_factories(eng):
+        prof = json.loads(f["profile"]) if f.get("profile") else {}
+        facs.append({"factory_id": f["factory_id"], "product_id": f"prd_{f['product_code']}" if f.get("product_code") else "",
+                     "has_mes": True, "has_cell": True, "region": f.get("region"), **prof})
     return derive.dataset_from_contracts(
         products=db.load_products(eng), orders=db.load_rows(eng, "supplier-order.v1"),
         reports=db.load_rows(eng, "factory-report.v1"), fai=db.load_rows(eng, "fai-report.v1"),
         cell=db.load_rows(eng, "cell-daily.v1"), outcomes=db.load_rows(eng, "order-quality-outcome.v1"),
-        factories=facs,
+        erp=db.load_rows(eng, "erp-daily.v1"), factories=facs,
     )
 
 
@@ -56,7 +58,8 @@ def score_from_db(eng: Engine, now: datetime | None = None, note: str = "") -> d
     disc_tr, disc = discrepancy.fit_predict(train, train), discrepancy.fit_predict(train, test)
     scored = build_scores(train, pred_tr, disc_tr, test, pred, disc, discrepancy.reasons(train, test))
     scored["scored_at"] = now_s
-    explain = two_stage.explain(train, test, LAYERS["L0+Cell+MES"])
+    explain = two_stage.explain(train, test, LAYERS["L0+Cell+MES+ERP"])
+    explain["params_pooled"] = factory_params.estimate(train).attrs["pooled"]
 
     dash = build_dashboard(data, scored, explain, today=now)
     score_rows = [to_contract(r) for _, r in scored.iterrows()]

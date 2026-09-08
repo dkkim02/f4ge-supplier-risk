@@ -25,7 +25,7 @@ from f4ge_supplier_risk import config
 from f4ge_supplier_risk.evaluation.metrics import split_by_time
 from f4ge_supplier_risk.features.build import LAYERS, build
 from f4ge_supplier_risk.generator.pipeline import build_dataset
-from f4ge_supplier_risk.models import discrepancy, two_stage
+from f4ge_supplier_risk.models import discrepancy, factory_params, two_stage
 from f4ge_supplier_risk.prediction.run import _predict
 from f4ge_supplier_risk.prediction.score import build_scores
 
@@ -48,7 +48,8 @@ def main() -> None:
         tr, pred_tr, discrepancy.fit_predict(tr, tr),
         te, pred, discrepancy.fit_predict(tr, te), discrepancy.reasons(tr, te),
     )
-    ex = two_stage.explain(tr, te, LAYERS["L0+Cell+MES"])
+    ex = two_stage.explain(tr, te, LAYERS["L0+Cell+MES+ERP"])
+    ex["params_pooled"] = factory_params.estimate(tr).attrs["pooled"]
     trust_low = set(scored.loc[scored["factory_trust_low"].astype(bool), "factory_id"])
 
     # 기준일: 테스트 구간 발주일의 80% 지점. 그 뒤에 끝나는 오더가 "진행 중".
@@ -62,13 +63,14 @@ def main() -> None:
     out["metrics"]["spearman"] = round(float(spearmanr(pred, te["true_escape_rate"].to_numpy()).statistic), 3)
     counts = {"a": out["coverage"]["a"], "b": out["coverage"]["b"]}
     (ROOT / "datasets/generated/dashboard_data.json").write_text(json.dumps(out, ensure_ascii=False))
-    tpl = (ROOT / "src/f4ge_supplier_risk/web/static/관제.html").read_text()
-    html = tpl.replace("__DATA__", json.dumps(out, ensure_ascii=False, separators=(",", ":")))
+    payload = json.dumps(out, ensure_ascii=False, separators=(",", ":"))
     dst = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "datasets/generated/관제.html"
-    dst.write_text(html)
+    dst.write_text((ROOT / "src/f4ge_supplier_risk/web/static/관제.html").read_text().replace("__DATA__", payload))
+    dst2 = dst.with_name("공장관제.html")
+    dst2.write_text((ROOT / "src/f4ge_supplier_risk/web/static/공장관제.html").read_text().replace("__DATA__", payload))
     inflight = sum(not r["late"] for r in out["rows"])
     print(f"rows {len(out['rows'])} · 진행 중 {inflight} · 공장 {counts} · Spearman {out['metrics']['spearman']}")
-    print(f"→ {dst}")
+    print(f"→ {dst}\n→ {dst2}")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,8 @@
-"""피처 테이블 — L0 / L0+L1.
+"""피처 테이블 — L0(포지 기록) · L0′ · L1(MES) · L2(CellOS) · L3(ERP).
+
+09-08 저녁: FactoryOS 소스 4개 전부 12곳에서 온다. ERP(L3)가 MES 의 대조군이다 —
+Cell 카운터(실제 생산)와 ERP 자재 소진(실제 생산+폐기)에서 **물리적 폐기량**이 나오고,
+그것이 보고 편향·검출률 분해의 근거가 된다(models/factory_params.py).
 
 **이 파일의 제약은 시간 순서다.**
 
@@ -80,6 +84,9 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
     cell_by_order: dict[str, list[dict]] = {}
     for c in data["cell_daily"]:
         cell_by_order.setdefault(c["order_id"], []).append(c)
+    erp_by_order: dict[str, list[dict]] = {}
+    for e in data.get("erp_daily", []):
+        erp_by_order.setdefault(e["order_id"], []).append(e)
 
     hist = _history_features(orders, data["quality_outcomes"])
     products = {p["product_id"]: p for p in data["products"]}
@@ -101,20 +108,50 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
         rep_produced = last.get("produced_qty", 0) or 1
         rep_rate = (rep_defects / rep_produced) if filed else np.nan
 
-        # 교차검증 쌍: 보고 수량 vs 자재 소진. 수량을 부풀리면 여기가 어긋난다
-        # 마지막 회차만 보면 안 된다 — 부풀리기는 특정 회차에서 일어나고
-        # 다음 회차에 실제 생산이 따라붙으면 흔적이 지워진다. 최댓값을 쓴다.
+        # ── L3 — ERP. 회계 숫자라 편향이 작다. MES 의 대조군 ──
+        erps = sorted(erp_by_order.get(o["order_id"], []), key=lambda e: e["day_index"])
+        erp_filed = [e for e in erps if not e["is_missing"]]
+        erp_last = erp_filed[-1] if erp_filed else {}
+        per_unit = products[o["product_id"]]["material_per_unit"]
+        erp_missing_rate = (sum(1 for e in erps if e["is_missing"]) / len(erps)) if erps else np.nan
+
+        def _phys_units(e: dict, mpu: float = per_unit) -> float:
+            # 소진 = 불출 − 재고 = (생산 + 폐기) × 단위 소요. 물리량이라 실제를 따라간다
+            return (e["material_issued_qty"] - e["material_on_hand_qty"]) / mpu
+
+        # ① 교차검증: MES 보고 수량 vs ERP 자재 소진. 수량을 부풀리면 여기가 어긋난다.
+        # 마지막 회차만 보면 안 된다 — 부풀리기는 특정 회차에서 일어나고 다음 회차에 실제 생산이
+        # 따라붙으면 흔적이 지워진다. 회차마다 그 날의 ERP 스냅샷과 대조해 최댓값을 쓴다.
         mat_gap = np.nan
-        if t2:
-            per_unit = products[o["product_id"]]["material_per_unit"]
-            gaps = [
-                (r["produced_qty"] - r["material_consumed_qty"] / per_unit)
-                / max(r["material_consumed_qty"] / per_unit, 1.0)
-                for r in t2
-                if r["material_consumed_qty"] > 0
-            ]
+        wip_gaps: list[float] = []
+        if filed and erp_filed:
+            t0 = _dt(o["ordered_at"])
+            gaps = []
+            for r in filed:
+                day = (_dt(r["due_at"]) - t0).total_seconds() / 86400
+                snap = None
+                for e in erp_filed:
+                    if e["day_index"] <= day - 1 + 1e-9:
+                        snap = e
+                    else:
+                        break
+                if snap is None:
+                    continue
+                units = _phys_units(snap)
+                if units > 20:
+                    gaps.append((r["produced_qty"] - units) / units)
+                # ⑥ 교차검증: MES 보고 (생산 − 폐기) vs ERP 재공 + 완성품. 재고에 없는 물건을 만들었다고 할 수 없다
+                if "wip_qty" in snap:
+                    inv = snap["wip_qty"] + snap.get("finished_goods_qty", 0)
+                    if inv > 20:
+                        wip_gaps.append((r["produced_qty"] - r.get("scrap_qty", 0) - inv) / inv)
             if gaps:
                 mat_gap = max(gaps)
+        wip_gap = max(wip_gaps) if wip_gaps else np.nan
+
+        # 물리적 폐기율 — ERP 소진(생산+폐기) − Cell 카운터(생산). 보고가 아니라 물리량에서 나온 값이고,
+        # 공장 보고 편향과 검출률을 가르는 근거다(models/factory_params.py)
+        phys_scrap_rate = np.nan
 
         # ── 교차검증 짝별 관측치 ──
         # 자기신고 항목과 물리적 증거를 짝지어 놓은 값들이다. 불일치 스칼라 하나로는
@@ -152,11 +189,15 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
         if stale:
             photo_stale = max(stale)
 
-        # ② 자체 불량률 ↔ 잔업: 불량은 없다는데 잔업은 늘어난다
-        ot_vs_reject = np.nan
-        if t2:
-            ot = float(np.mean([r["overtime_hours"] for r in t2]))
-            ot_vs_reject = ot / (rep_rate * 100.0 + 0.3)
+        # ② 자체 불량률(MES) ↔ 잔업(ERP 근태): 불량은 없다는데 잔업은 늘어난다
+        ot_rows = [e["overtime_hours"] for e in erp_filed if "overtime_hours" in e]
+        overtime_mean = float(np.mean(ot_rows)) if ot_rows else np.nan
+        ot_vs_reject = overtime_mean / (rep_rate * 100.0 + 0.3) if ot_rows and filed else np.nan
+        hc_rows = [e["headcount"] for e in erp_filed if "headcount" in e]
+        headcount_mean = float(np.mean(hc_rows)) if hc_rows else np.nan
+        outsourcing_recv = np.nan
+        if erp_last and erp_last.get("outsourcing_po_qty"):
+            outsourcing_recv = erp_last["outsourcing_received_qty"] / erp_last["outsourcing_po_qty"]
 
         # ── L2 — CellOS 설비 신호. 사람 손이 닿지 않아 편향이 없다 ──
         cells = sorted(cell_by_order.get(o["order_id"], []), key=lambda c: c["day_index"])
@@ -172,9 +213,12 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
             # ★ 교차검증: 보고 수량 vs 설비 카운터. 물리적으로 어긋날 수 없는 대조다
             counter = float(cells[-1]["produced_by_counter"])
             counter_gap = (rep_produced - counter) / max(counter, 1.0) if last else np.nan
+            if erp_last and counter > 20:
+                phys_scrap_rate = max(_phys_units(erp_last) - counter, 0.0) / counter
         else:
             cell_uptime = cell_uptime_min = cell_ct_cv = np.nan
             cell_anom = cell_anom_rate = cell_tool = counter_gap = np.nan
+            counter = np.nan
 
         f = fai.get(o["order_id"])
         rows.append(
@@ -187,7 +231,6 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                 "l0_price_zscore": o["price_zscore"],
                 "l0_log_qty": math.log(o["order_qty"]),
                 "l0_quote_response_h": o["quote_response_h"],
-                "l0_load_index": o["load_index"],
                 "l0_market_eu": float(o["market"] == "eu"),
                 **{f"l0_{k}": v for k, v in hist[o["order_id"]].items()},
                 # ── L0′ — 우리가 자동으로 남기는 것. 조작 불가 ──
@@ -197,8 +240,9 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                 "l0m_delay_max": m["report_delay_days_max"]
                 if m["report_delay_days_max"] is not None
                 else 0.0,
-                "l0m_missing": m["report_missing_count"],
-                "l0m_blank": m["field_blank_count"],
+                # 집계 주기가 공장마다 달라 회차 수가 다르다 — 비율로 잰다
+                "l0m_missing": m.get("report_missing_rate", m["report_missing_count"]),
+                "l0m_blank": m.get("field_blank_rate", m["field_blank_count"]),
                 "l0m_promise_changes": m["promised_date_change_count"],
                 "l0m_promise_change_late": m["promised_date_change_last_progress"],
                 # ── L1 — 공장 자진 보고 ──
@@ -210,15 +254,11 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                 "l1_scrap_ratio": last.get("scrap_qty", 0) / rep_produced,
                 "l1_rework_ratio": last.get("rework_qty", 0) / rep_produced,
                 "l1_issue_any": issue_any,
-                "l1_overtime_mean": float(np.mean([r["overtime_hours"] for r in t2]))
-                if t2
-                else np.nan,
                 "l1_reject_ratio": (
                     float(np.mean([r["reject_qty"] / max(r["inspected_qty"], 1) for r in t2]))
                     if t2
                     else np.nan
                 ),
-                "l1_material_gap": mat_gap,
                 # ── L2 ──
                 "l2_uptime_mean": cell_uptime,
                 "l2_uptime_min": cell_uptime_min,
@@ -229,7 +269,18 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                 "l1_pace_gap": pace_gap,
                 "l1_silent_delay": silent_delay,
                 "l1_photo_stale": photo_stale,
-                "l1_ot_vs_reject": ot_vs_reject,
+                # ── L3 — ERP ──
+                "l3_material_gap": mat_gap,
+                "l3_wip_gap": wip_gap,
+                "l3_ot_vs_reject": ot_vs_reject,
+                "l3_overtime_mean": overtime_mean,
+                "l3_headcount_mean": headcount_mean,
+                "l3_outsourcing_recv_ratio": outsourcing_recv,
+                "l3_erp_missing_rate": erp_missing_rate,
+                "l3_phys_scrap_rate": phys_scrap_rate,
+                # 원 카운트 — 공장 파라미터 분해(models/factory_params.py)가 공장별로 합산한다. 예측 피처는 아니다
+                "obs_produced_counter": counter,
+                "obs_phys_scrap": phys_scrap_rate * counter if not np.isnan(phys_scrap_rate) else np.nan,
                 "l1_fai_margin_min": f["margin_min"] if f else np.nan,
                 "l1_fai_out_of_tol": f["out_of_tol_count"] if f else np.nan,
                 "l1_fai_submitted": float(f is not None),
@@ -255,7 +306,6 @@ L0_COLS = tuple(
         "l0_price_zscore",
         "l0_log_qty",
         "l0_quote_response_h",
-        "l0_load_index",
         "l0_market_eu",
         "l0_hist_orders",
         "l0_hist_inspected",
@@ -274,11 +324,12 @@ L0M_COLS = (
 # 교차검증 짝의 관측치. 자기신고 항목과 물리적 증거를 짝지어 놓은 값들이고,
 # `models/discrepancy.py` 가 **어느 짝이 어긋났는지** 를 여기서 읽는다.
 PAIR_COLS = (
-    "l1_material_gap",  # ① 보고 수량 ↔ 자재 소진량
-    "l1_ot_vs_reject",  # ② 자체 불량률 ↔ 잔업
+    "l3_material_gap",  # ① MES 보고 수량 ↔ ERP 자재 소진량
+    "l3_ot_vs_reject",  # ② MES 자체 불량률 ↔ ERP 잔업
     "l1_pace_gap",  # ③ 보고 납기 ↔ 진척 추세
     "l1_silent_delay",  # ④ "이상 없음" ↔ 보고 지연
     "l1_photo_stale",  # ⑤ 사진 시각 ↔ 보고 시각
+    "l3_wip_gap",  # ⑥ MES 보고 (생산 − 폐기) ↔ ERP 재공 + 완성품
 )
 
 L1_COLS = (
@@ -288,12 +339,25 @@ L1_COLS = (
     "l1_scrap_ratio",
     "l1_rework_ratio",
     "l1_issue_any",
-    "l1_overtime_mean",
     "l1_reject_ratio",
-    *PAIR_COLS,
+    "l1_pace_gap",
+    "l1_silent_delay",
+    "l1_photo_stale",
     "l1_fai_margin_min",
     "l1_fai_out_of_tol",
     "l1_fai_submitted",
+)
+
+# L3 — ERP. 회계 숫자라 편향이 작다. MES 의 대조군이자 물리적 폐기율의 출처.
+L3_COLS = (
+    "l3_material_gap",
+    "l3_wip_gap",
+    "l3_ot_vs_reject",
+    "l3_overtime_mean",
+    "l3_headcount_mean",
+    "l3_outsourcing_recv_ratio",
+    "l3_erp_missing_rate",
+    "l3_phys_scrap_rate",
 )
 
 # L2 — CellOS 설비 신호. 편향이 없다.
@@ -313,12 +377,14 @@ FAI_COLS = ("l1_fai_margin_min", "l1_fai_out_of_tol", "l1_fai_submitted")
 # MES/FactoryOS 가 주는 생산·불량 정보.
 MES_COLS = tuple(c for c in L1_COLS if c not in FAI_COLS)
 
-# ★ 계층이 곧 **설치 단계**다. 세 숫자가 설치 가치를 말한다.
+# ★ 계층 = 소스. 네 소스가 전부 오므로(09-08 저녁) 층별 증분은 "그 소스가 없으면 얼마나 잃는가" 다.
 LAYERS = {
     "L0": L0_COLS + L0M_COLS + FAI_COLS,
     "L0+Cell": L0_COLS + L0M_COLS + FAI_COLS + L2_COLS,
     "L0+Cell+MES": L0_COLS + L0M_COLS + FAI_COLS + L2_COLS + MES_COLS,
-    # 하위 호환 — 기존 실험 스크립트가 쓴다
+    "L0+Cell+MES+ERP": L0_COLS + L0M_COLS + FAI_COLS + L2_COLS + MES_COLS + L3_COLS,
+    # 하위 호환 — 기존 테스트·스크립트가 쓴다. 전부 = 네 소스
     "L0+L0′": L0_COLS + L0M_COLS,
-    "L0+L0′+L1": L0_COLS + L0M_COLS + L1_COLS + L2_COLS,
+    "L0+L0′+L1": L0_COLS + L0M_COLS + FAI_COLS + L2_COLS + MES_COLS + L3_COLS,
 }
+FULL_COLS = LAYERS["L0+Cell+MES+ERP"]

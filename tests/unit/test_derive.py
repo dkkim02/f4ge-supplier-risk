@@ -21,6 +21,7 @@ def _contract_rows(dataset):
         reports=[contracts.report_row(r, fac[r["order_id"]]) for r in dataset["factory_reports"]],
         fai=[contracts.fai_row(f, fac[f["order_id"]]) for f in dataset["fai_reports"]],
         cell=[contracts.cell_row(c, fac[c["order_id"]]) for c in dataset["cell_daily"]],
+        erp=[contracts.erp_row(e, fac[e["order_id"]]) for e in dataset["erp_daily"]],
         outcomes=[contracts.outcome_row(q, fac[q["order_id"]]) for q in dataset["quality_outcomes"]],
     )
 
@@ -29,7 +30,7 @@ def test_roundtrip_features_match_generator(dataset):
     direct = build(dataset)
     via = build(derive.dataset_from_contracts(**_contract_rows(dataset)))
     assert list(via["order_id"]) == list(direct["order_id"])
-    feature_cols = [c for c in direct.columns if c.startswith(("l0_", "l0m_", "l1_", "l2_", "y_"))]
+    feature_cols = [c for c in direct.columns if c.startswith(("l0_", "l0m_", "l1_", "l2_", "l3_", "y_"))]
     for c in feature_cols:
         a, b = direct[c].to_numpy(float), via[c].to_numpy(float)
         both_nan = np.isnan(a) & np.isnan(b)

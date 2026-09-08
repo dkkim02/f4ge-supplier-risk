@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.f4ge.io/schemas/supplier-risk/factory-report.v1.schema.json",
-  "title": "Supplier Risk — Factory MES Daily Report (입력, 일 1회)",
-  "description": "[신규 정의] 공장 MES/FactoryOS API 가 하루 한 번 보내는 오더별 집계. 09-08 CTO 확인 — 사람이 채우는 주간 보고가 아니다. **자체 MES 를 FactoryOS 에 연동한 공장(유형 a)에서만 온다.** CellOS·FactoryOS 는 12곳 전부 있지만 생산·불량 데이터는 연동한 곳만 흐른다 — 미연동 공장은 결측이 아니라 경로가 없는 것이고, 그 오더에는 이 계약의 행이 하나도 없다. is_missing=true 는 API 연결이 끊긴 날이다 — 사람의 누락이 아니다. 폐기·재작업 판정은 여전히 사람이 하므로 scrap/rework 에는 편향이 남는다. 수량 규칙: FactoryOS 의 good_quantity 는 produced − scrap − rework 로 유도한다. datasets/generated/factory_reports.jsonl 의 한 줄.",
+  "title": "Supplier Risk — Factory MES Report (입력, 공장별 주기)",
+  "description": "[신규 정의] FactoryOS 가 공장 MES API 에서 수집한 오더별 집계. FactoryOS 에는 MES · CellOS · ERP · 포지 기록 네 소스가 12곳 전부에서 들어온다(2026-09-08 저녁, 사용자 확정) — 이 계약은 그중 MES. 자재·인원·잔업·외주는 erp-daily.v1 로 분리했다. 집계 주기는 공장마다 다르다(period: daily/shift/weekly) — seq 는 주기 단위 회차다. 수량 단위가 로트인 공장은 produced_quantity 가 로트 배수로 내림돼 온다. 자체 불량코드는 FactoryOS 가 표준 코드로 정규화한다. is_missing=true 는 API 연결이 끊긴 회차다 — 사람의 누락이 아니다. 폐기·재작업 판정은 사람이 하므로 scrap/rework 에는 편향이 남는다. 선택 필드(자체검사·불량코드·설비)는 공장마다 채우는 것이 다르다 — 없으면 키 자체가 없다. datasets/generated/factory_reports.jsonl 의 한 줄.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -34,7 +34,7 @@
     "seq": {
       "type": "integer",
       "minimum": 1,
-      "description": "오더 안에서의 회차. 일 1회이므로 발주 후 경과일과 같다."
+      "description": "오더 안에서의 회차. 주기(period)에 따라 하루 1회·2회·주 1회."
     },
     "due_at": {
       "type": "string",
@@ -56,11 +56,9 @@
     "source": {
       "type": "string",
       "enum": [
-        "mes_api",
-        "factoryos",
-        "manual"
+        "mes"
       ],
-      "description": "mes_api = 자체 MES → FactoryOS 연동(유형 a, 현재 3곳). factoryos = 사람이 FactoryOS 에 직접 입력 — 종이 보고에 가까운 편향이라 하한 논거가 약하다. manual = 그 외. 경로별로 편향 파라미터를 나눈다."
+      "description": "이 계약은 MES 전용. ERP 는 erp-daily.v1, 설비 신호는 cell-daily.v1."
     },
     "produced_quantity": {
       "type": "integer",
@@ -130,15 +128,6 @@
       "type": "string",
       "pattern": "^mtl_[a-z0-9][a-z0-9_-]{1,63}$"
     },
-    "material_supplier": {
-      "type": "string",
-      "pattern": "^sup_[a-z0-9][a-z0-9_-]{0,63}$"
-    },
-    "material_consumed_quantity": {
-      "type": "number",
-      "minimum": 0,
-      "description": "누적 자재 소진. 물리량이라 실제를 따라간다 — 수량 부풀리기의 대조군(qty_inflation)."
-    },
     "machine_id": {
       "type": "string",
       "pattern": "^mch_[a-z0-9][a-z0-9_-]{1,63}$"
@@ -151,15 +140,6 @@
         "night"
       ]
     },
-    "operator_count": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "overtime_hours": {
-      "type": "number",
-      "minimum": 0,
-      "description": "잔업. 불량은 적다는데 잔업이 많으면 defect_hiding."
-    },
     "photo_taken_at": {
       "type": [
         "string",
@@ -167,6 +147,15 @@
       ],
       "format": "date-time",
       "description": "현장 사진 EXIF 시각. reported_at 과 멀면 stale_evidence."
+    },
+    "period": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "shift",
+        "weekly"
+      ],
+      "description": "이 공장의 MES 집계 주기. seq 간 간격 = 1일 / 0.5일 / 7일. 공장별 형식 차이 중 하나."
     }
   },
   "if": {
@@ -210,7 +199,8 @@
       "rework_quantity",
       "stage",
       "promised_date_reported",
-      "issue_flag"
+      "issue_flag",
+      "period"
     ]
   }
 }

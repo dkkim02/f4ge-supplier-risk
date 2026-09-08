@@ -1,4 +1,7 @@
-"""L1 — 공장 주간 보고. **편향·지연·결측이 전부 여기 들어간다.**
+"""L1 — 공장 MES 집계. **편향·지연·결측이 전부 여기 들어간다.**
+
+2026-09-08 저녁: 자재·인원·잔업·외주는 ERP(erp.py)로 옮겼다. MES 에는 생산·폐기·재작업·자체검사·공정 단계·특이사항만 남는다.
+공장별 **형식**이 다르다 — 집계 주기(일/시프트/주), 수량 단위(개/로트 배수), 불량코드 체계(표준/자체) — 그리고 **채우는 선택 필드**가 다르다.
 
 보고는 진실의 함수다. `production.build_truth` 가 먼저 돌아야 한다.
 
@@ -33,6 +36,8 @@ from f4ge_supplier_risk.rng import stream
 
 _STAGES = ("setup", "machining", "finishing", "inspection", "packing")
 _DEFECT_TYPES = ("dimension", "surface", "function", "material", "other")
+# 자체 코드 체계를 쓰는 공장의 불량코드. FactoryOS 가 수집 시 표준 코드로 정규화한다(contracts.report_row).
+LOCAL_DEFECT_CODES = {"dimension": "DIM", "surface": "SRF", "function": "FNC", "material": "MAT", "other": "ETC"}
 
 
 def _stage_for(progress: float) -> str:
@@ -66,12 +71,12 @@ def build_reports(
     """
     rng = stream(cfg["seed"], "report", order["order_id"])
     qty = order["order_qty"]
-    interval = cfg["scale"]["mes_interval_days"]
+    # 집계 주기는 공장마다 다르다 — 일 1회 · 시프트(하루 2회) · 주 1회. 회차 수가 그에 따라 달라진다.
+    interval = float(factory.get("mes_interval_days", cfg["scale"]["mes_interval_days"]))
     n_reports = max(2, int(np.ceil(truth["actual_days"] / interval)))
-    # 자체 MES 를 FactoryOS 에 연동하지 않은 공장은 생산·불량 정보가 아예 오지 않는다.
-    # 결측이 아니라 **미연동**이고, 그것이 유형 b 의 정의다. (CellOS·FactoryOS 자체는 12곳 전부 있다.)
-    if not factory["has_mes"]:
-        return [], _empty_mech()
+    fields = factory.get("fields_mes", {})
+    lot = int(factory.get("lot_size", 1)) if factory.get("qty_unit") == "lot" else 1
+    local_codes = factory.get("defect_code_scheme") == "local"
 
     # 이 오더가 얼마나 곤란한가 (0~1). 지연·결측·편향이 전부 이 값을 따라간다.
     trouble = float(
@@ -127,6 +132,8 @@ def build_reports(
         behind = max(0.0, (k * interval) / truth["actual_days"] - progress)
         inflation = factory["bias_sensitivity"] * behind * 0.5
         rep_produced = int(min(qty, round(true_c["produced"] * (1.0 + inflation))))
+        if lot > 1:
+            rep_produced = (rep_produced // lot) * lot  # 로트 단위로 찍는 공장 — 로트 배수로 내림
         mech["inflation_max"] = max(mech["inflation_max"], inflation)
 
         # ── 불량 축소 보고. 나쁠수록 더 줄인다 ──
@@ -161,6 +168,7 @@ def build_reports(
             "due_at": _iso(due),
             "reported_at": _iso(reported_at),
             "is_missing": False,
+            "period": factory.get("mes_period", "daily"),
             "produced_qty": rep_produced,
             "scrap_qty": rep_scrap,
             "rework_qty": rep_rework,
@@ -172,35 +180,30 @@ def build_reports(
         if trouble > 0.35 and not row["issue_flag"]:
             mech["issue_suppressed"] += 1
 
-        # ── MES 가 함께 올리는 값들. 있는 공장은 항상 온다(사람 손이 아니다) ──
-        if True:
+        # ── MES 선택 필드 — 공장마다 채우는 것이 다르다(fields_mes). 자재·인원·잔업은 ERP 로 갔다 ──
+        row["shift"] = ("day", "swing", "night")[k % 3 if interval < 1 else int(rng.integers(3))]
+        row["material_lot_id"] = order["material_lot_id"]
+        if fields.get("inspected_qty"):
             insp = round(float(true_c["produced"] * float(rng.uniform(0.3, 1.0))))
             true_found = true_c["scrap"] + true_c["rework"]
             row |= {
                 "inspected_qty": insp,
                 "inspection_type": "full" if insp >= true_c["produced"] else "sampling",
                 "reject_qty": round(float(true_found * shrink)),
-                "defect_type": _DEFECT_TYPES[int(rng.integers(len(_DEFECT_TYPES)))],
-                # 자재 소진은 물리량이라 **실제값**을 따라간다 → 수량 부풀리기의 대조군
-                "material_consumed_qty": round(
-                    (true_c["produced"] + true_c["scrap"]) * product["material_per_unit"], 1
-                ),
-                "material_lot_id": order["material_lot_id"],
-                "material_supplier": order["material_supplier"],
-                "machine_id": f"mch_{factory['factory_id'][-2:]}_{int(rng.integers(1, 4))}",
-                "shift": ("day", "swing", "night")[int(rng.integers(3))],
-                "operator_count": int(rng.integers(2, 7)),
-                # 잔업도 실제 곤란을 따라간다 → 불량 은폐의 대조군
-                "overtime_hours": round(float(rng.gamma(2.0, 3.0)) * (1.0 + 3.0 * trouble), 1),
             }
-            # 사진: 곤란하면 지난주 것을 재사용한다
-            if last_photo_at is not None and rng.random() < 0.15 + 0.45 * trouble:
-                row["photo_taken_at"] = _iso(last_photo_at)
-                mech["photo_reused"] += 1
-            else:
-                taken = reported_at - timedelta(hours=float(rng.uniform(1, 20)))
-                row["photo_taken_at"] = _iso(taken)
-                last_photo_at = taken
+        if fields.get("defect_type"):
+            code = _DEFECT_TYPES[int(rng.integers(len(_DEFECT_TYPES)))]
+            row["defect_type"] = LOCAL_DEFECT_CODES[code] if local_codes else code
+        if fields.get("machine_id"):
+            row["machine_id"] = f"mch_{factory['factory_id'][-2:]}_{int(rng.integers(1, 4))}"
+        # 현장 사진 — FactoryOS 첨부(공장 담당자가 올린다). 곤란하면 지난 것을 다시 올린다.
+        if last_photo_at is not None and rng.random() < 0.15 + 0.45 * trouble:
+            row["photo_taken_at"] = _iso(last_photo_at)
+            mech["photo_reused"] += 1
+        else:
+            taken = reported_at - timedelta(hours=float(rng.uniform(1, 20)))
+            row["photo_taken_at"] = _iso(taken)
+            last_photo_at = taken
 
         out.append(row)
 
@@ -230,8 +233,6 @@ def build_cell_daily(
     **교차검증의 증거 쪽**으로 쓸 수 있다 — 보고 수량이 가동시간 x 사이클타임과
     맞지 않으면 물리적으로 불가능한 보고다.
     """
-    if not factory["has_cell"]:
-        return []
     rng = stream(cfg["seed"], "cell", order["order_id"])
     days = max(1, int(np.ceil(truth["actual_days"])))
     out = []

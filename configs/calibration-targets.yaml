@@ -84,12 +84,12 @@ targets:
 
   # ── 보고 ───────────────────────────────────────────────
   # 2026-09-08 변경 — 생산·불량 정보는 사람이 채우는 주간 보고가 아니라
-  # MES/FactoryOS API 로 온다(CTO 확인). 주기가 주 1회에서 일 1회로 바뀌었다.
+  # FactoryOS 가 공장 MES/ERP API 에서 가져온다(CTO 확인). 주기가 주 1회에서 일 1회로 바뀌었다.
   mes_interval_days:
     target: 1
     tol: 0.0
     source: cto_2026_09_08
-    note: "MES/FactoryOS API 일 단위 집계. 사람 손이 아니므로 주기가 촘촘하다."
+    note: "FactoryOS 가 MES/ERP 에서 일 단위로 수집. 사람이 입력하지 않으므로 주기가 촘촘하다."
 
   # 계측 수준이 공장마다 다르다. 이 비율이 곧 설치 진행 상황이다.
   cell_coverage:
@@ -99,12 +99,12 @@ targets:
     note: "12/12. CellOS·FactoryOS 는 협력 조건 — 전부 설치돼 있다(09-08 저녁 확정). 설비 신호는 항상 온다."
 
   mes_coverage:
-    target: 0.25
-    tol: 0.05
-    source: factory_types
+    target: 1.0
+    tol: 0.0
+    source: user_2026_09_08_evening
     note: >
-      유형 a(3)/12. 자체 MES 를 FactoryOS 에 연동해 생산·불량 정보가 오는 공장 비율. 나머지 9곳은 설비 신호만.
-      ⚠ 전체 평균 성능이 이 비율에 희석된다 — 설치 가치는 **유형별로** 재야 보인다.
+      12/12. FactoryOS 에는 MES · CellOS · ERP · 포지 기록 네 소스가 12곳 전부에서 온다(사용자 확정).
+      유형 구분은 폐기했다. 공장 차이는 보고 품질(편향·성실도·필드·형식)이다.
 
 # ── ⚠ 실측 근거 없음. 민감도 분석 대상 ────────────────────
 assumptions:

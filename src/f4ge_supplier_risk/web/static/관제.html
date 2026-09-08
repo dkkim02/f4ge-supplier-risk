@@ -262,8 +262,8 @@ tbody tr.rowlink { cursor: pointer; }
         <div style="padding:0 16px 14px"><div id="matrix"></div></div>
         <div class="card-note">
           <b>두 축은 서로 다른 질문에 답한다.</b> 오른쪽으로 갈수록 물건이 나쁠 것 같고,
-          위로 갈수록 그 공장 말을 믿기 어렵다. 오른쪽 아래는 <b>검사를 조이면</b> 되고,
-          왼쪽 위는 <b>가서 봐야</b> 안다 — 숫자가 좋아 보이는 것 자체가 신호이기 때문이다.
+          위로 갈수록 그 공장 말을 믿기 어렵다. 오른쪽 아래는 <b>품질 검토</b> 대상이고,
+          왼쪽 위는 <b>보고 검토</b> 대상이다 — 숫자가 좋아 보이는 것 자체가 신호이기 때문이다.
         </div>
       </div>
 
@@ -333,12 +333,12 @@ tbody tr.rowlink { cursor: pointer; }
     <div class="card">
       <div class="card-head">
         <div class="card-title">무엇이 어긋났는가</div>
-        <div class="card-sub">자기신고 항목과 물리적 증거를 짝지어 대조한 결과 · 가서 확인할 것</div>
+        <div class="card-sub">자기신고 항목과 물리적 증거를 짝지어 대조한 결과 · 확인할 것</div>
       </div>
       <div class="card-body"><div id="facReasons"></div></div>
       <div class="card-note">
-        불일치 값 하나로는 <b>가서 뭘 봐야 하는지</b>를 말할 수 없다. 짝마다 따로 재면
-        방문이 탐색이 아니라 검증이 된다. 각 사유는 생성기의 해당 메커니즘 정답값으로
+        불일치 값 하나로는 <b>무엇을 대조해야 하는지</b>를 말할 수 없다. 짝마다 따로 재면
+        검토가 탐색이 아니라 검증이 된다. 각 사유는 생성기의 해당 메커니즘 정답값으로
         검증했다 — 발동 시 그 메커니즘이 실제로 심하다
         (증거 재활용 15.4배 · 문제 은폐 2.4배 · 불량 은폐 2.1배 · 낙관 납기 2.0배).
       </div>
@@ -428,10 +428,9 @@ const fmt = (n,d=0)=>Number(n).toLocaleString("ko-KR",{minimumFractionDigits:d,m
 
 const RISK = {low:"낮음", medium:"보통", high:"높음", critical:"심각"};
 // 권고는 무채색 채널이다. 위험 4-tier 색을 빌리지 않는다.
+// 권고 코드는 review_needed 하나다(09-08 저녁). 무엇을 할지는 담당자가 정하고, 화면은 「어긋난 것」「확인할 것」으로 근거만 준다.
 const ACT = {
-  site_visit:["현장 방문","strong","보고를 믿기 어렵다 — 가서 봐야 안다"],
-  tighten_inspection:["검사 강화","","입고검사 강화 · 제3자 DUPRO 발주"],
-  call:["전화","","증거가 가리키는 것보다 보고가 좋다"],
+  review_needed:["검토 필요","strong","예측 위험 상위 10% 또는 보고와 증거의 불일치"],
   none:["없음","quiet",""],
 };
 const inflight = R.filter(r=>!r.late), done = R.filter(r=>r.late);
@@ -491,16 +490,16 @@ document.getElementById("coverage").innerHTML =
   const c = {};
   for(const a in ACT) c[a] = inflight.filter(r=>r.act===a).length;
   document.getElementById("queue").innerHTML =
-    ["site_visit","tighten_inspection","call","none"].map(a=>{
+    ["review_needed","none"].map(a=>{
       const [l,,d] = ACT[a];
       return `<div class="kpi"><div class="v${c[a]?"":" empty"}">${c[a]}</div>
-        <div class="t">${a==="none"?"조치 없음":l}</div>
+        <div class="t">${a==="none"?"해당 없음":l}</div>
         <div class="d">${a==="none"?"진행 중 오더 중 나머지":d}</div></div>`;}).join("");
 
-  const total = c.site_visit + c.tighten_inspection + c.call;
-  document.getElementById("inflightNote").textContent = `${inflight.length}건 · 조치 필요 ${total}건`;
+  const total = c.review_needed;
+  document.getElementById("inflightNote").textContent = `${inflight.length}건 · 검토 필요 ${total}건`;
 
-  const rank = a => ["site_visit","tighten_inspection","call","none"].indexOf(a);
+  const rank = a => ["review_needed","none"].indexOf(a);
   tbl("tInflight",[
     {h:"오더", f:r=>`<b>${r.id.replace("ord_","")}</b> <span class="sub">${r.prd}</span>`},
     {h:"공장", f:r=>`${facName(r.fac)}${r.trustLow?` <span class="chip gap">신뢰 낮음</span>`:""}${r.hasMes?"":` <span class="chip type none">미연동</span>`}`},
@@ -542,10 +541,10 @@ document.getElementById("coverage").innerHTML =
     s.appendChild(E("line",{x1:a,y1:b,x2:cc,y2:d},
       {stroke:"var(--border)",strokeWidth:"1",strokeDasharray:"4 4"})));
 
-  [[ml+9,mt+17,"가서 본다","보고를 못 믿는다"],
-   [ml+pw-9,mt+17,"가서 보고 + 검사 조인다","둘 다 나쁘다"],
-   [ml+9,mt+ph-13,"그대로 둔다","조용한 공장"],
-   [ml+pw-9,mt+ph-13,"검사를 조인다","정직한데 품질이 나쁘다"]].forEach(([x,y,t,sub],i)=>{
+  [[ml+9,mt+17,"보고 검토","보고를 못 믿는다"],
+   [ml+pw-9,mt+17,"보고 + 품질 검토","둘 다 나쁘다"],
+   [ml+9,mt+ph-13,"검토 대상 아님","조용한 공장"],
+   [ml+pw-9,mt+ph-13,"품질 검토","정직한데 품질이 나쁘다"]].forEach(([x,y,t,sub],i)=>{
     const a = i%2 ? "end" : "start";
     T(x,y,t,{a,s:11.5,c:"var(--text-2)",w:600});
     T(x,y+14,sub,{a,s:10.5});});
@@ -572,8 +571,8 @@ document.getElementById("coverage").innerHTML =
                : {fill:"var(--card)",stroke:"var(--muted)",strokeWidth:"1.5",strokeDasharray:"2 2"}));
     const lb=T(x+11,y+4,facName(f.id).replace("공장 ",""),{s:f.hasMes?11:10,c:f.hasMes?"var(--text-2)":"var(--label)",w:500});
     if(x>ml+pw*0.7){ lb.setAttribute("x",x-11); lb.setAttribute("text-anchor","end"); }
-    const acts=f.actions.site_visit+f.actions.tighten_inspection+f.actions.call;
-    const label=`${facName(f.id)} · ${f.prd} · ${f.label}\n예상 불량 ${fmt(f.ppmMed)} PPM\n${f.hasMes?`불일치 ${f.disc>0?"+":""}${f.disc.toFixed(2)}${f.trustLow?"  (신뢰 낮음)":""}`:"불일치 — 보고가 없어 정의되지 않는다"}\n오더 ${f.orders}건 · 조치 ${acts}건\nFAI 제출률 ${(f.faiRate*100).toFixed(0)}%`;
+    const acts=f.actions.review_needed;
+    const label=`${facName(f.id)} · ${f.prd} · ${f.label}\n예상 불량 ${fmt(f.ppmMed)} PPM\n${f.hasMes?`불일치 ${f.disc>0?"+":""}${f.disc.toFixed(2)}${f.trustLow?"  (신뢰 낮음)":""}`:"불일치 — 보고가 없어 정의되지 않는다"}\n오더 ${f.orders}건 · 검토 필요 ${acts}건\nFAI 제출률 ${(f.faiRate*100).toFixed(0)}%`;
     const hit=E("circle",{cx:x,cy:y,r:15},{fill:"transparent",cursor:"pointer"});
     hit.addEventListener("click",()=>openFac(f.id));
     hit.addEventListener("pointerenter",e=>showTip(e,label+"\n\n클릭하면 상세"));
@@ -589,6 +588,7 @@ document.getElementById("coverage").innerHTML =
   const EF=D.effect, pc=v=>v==null?dash():`<span class="mono">${(v*100).toFixed(1)}%</span>`;
   document.getElementById("effectSub").textContent =
     `테스트 ${fmt(D.metrics.orders)}건 · ${EF.seeds} seed 평균 · 보고 있는 공장 ${EF.reporting}곳`;
+  // 행 둘 — 전체 오더의 검토 필요(실제 위험을 잡는가) · 보고 있는 오더의 검토 필요(편향 심한 공장을 잡는가). 모집단이 다르다.
   tbl("tEffect",[
     {h:"권고", f:r=>r[0]},
     {h:"건수", n:1, f:r=>r[1]},
@@ -596,18 +596,19 @@ document.getElementById("coverage").innerHTML =
     {h:"편향 심한 공장", n:1, f:r=>r[3]},
   ],[
     ...EF.rows.filter(r=>r[0]!=="none").map(([a,n,risky,biased])=>[
-      actChip(a), `<span class="mono">${n.toFixed(1)}</span>`,
-      a==="tighten_inspection"?`<b class="mono">${(risky*100).toFixed(1)}%</b>`:pc(risky),
+      `${actChip("review_needed")} <span class="sub">${a==="review_needed"?"전체 오더":"보고 있는 오더"}</span>`,
+      `<span class="mono">${n.toFixed(1)}</span>`,
+      risky==null ? dash() : `<b class="mono">${(risky*100).toFixed(1)}%</b>`,
       pc(biased)]),
     [`<span style="color:var(--label)">— 기저율</span>`,`<span class="mono" style="color:var(--label)">${fmt(D.metrics.orders)}</span>`,
      `<span class="mono" style="color:var(--label)">${(EF.base.risky*100).toFixed(0)}%</span>`,
      `<span class="mono" style="color:var(--label)">${(EF.base.biased_reporting*100).toFixed(1)}%</span>`],
   ],"");
   document.getElementById("effectNote").innerHTML =
-    `<b>검사 강화</b>는 실제로 나쁜 오더를 기저의 ${(EF.rows[1][2]/EF.base.risky).toFixed(1)}배로 잡는다 — 생성기가 바뀌어도 유지되는 축이다.
-     <b>현장 방문</b>은 지금 MES 를 연동한 공장이 ${EF.reporting}곳뿐이라 기저 +${((EF.rows[0][3]-EF.base.biased_reporting)*100).toFixed(0)}pt 에 그친다.
-     12곳 전부 연동하면 ${(EF.note_all12.visit_prec*100).toFixed(0)}% 까지 오른다 —
-     <b>MES 연동이 늘어야 성립하는 상품</b>이다. CellOS·FactoryOS 는 이미 12곳 전부 있다.`;
+    `<b>검토 필요</b>는 실제로 나쁜 오더를 기저의 ${(EF.rows[0][2]/EF.base.risky).toFixed(1)}배로 잡는다.
+     보고 있는 오더에서 <b>편향 심한 공장</b>을 잡는 정밀도는 ${(EF.rows[1][3]*100).toFixed(1)}% 로 기저 ${(EF.base.biased_reporting*100).toFixed(1)}% 와 같다 —
+     12곳 전부 연동해도 ${(EF.note_all12.visit_prec*100).toFixed(1)}% vs 기저 ${(EF.note_all12.visit_base*100).toFixed(1)}% 다.
+     권고를 한 코드로 합치면서 예측 위험 기준 오더와 불일치 기준 오더가 한 집합에 섞였기 때문이다. 어느 기준으로 걸렸는지는 「어긋난 것」「확인할 것」 열이 말한다.`;
 
   const facOrder = [...F].sort((a,b)=>(b.hasMes-a.hasMes)||((b.disc??-9)-(a.disc??-9))||(b.ppmMed-a.ppmMed));
   tbl("tFactory",[
@@ -622,11 +623,7 @@ document.getElementById("coverage").innerHTML =
     {h:"집계 누락", n:1, f:f=>f.missSum==null?noPath("—"):`<span class="mono">${f.missSum}회</span>`},
     {h:"FAI 제출", n:1, f:f=>`<span class="mono">${(f.faiRate*100).toFixed(0)}%</span>`},
     {h:"실제 로트 불합격", n:1, f:f=>`<span class="mono">${(f.histRejRate*100).toFixed(1)}%</span>`},
-    {h:"조치", f:f=>{const a=f.actions, p=[];
-      if(a.site_visit) p.push(`방문 ${a.site_visit}`);
-      if(a.tighten_inspection) p.push(`검사 ${a.tighten_inspection}`);
-      if(a.call) p.push(`전화 ${a.call}`);
-      return p.length?`<span class="sub">${p.join(" · ")}</span>`:`<span style="color:var(--placeholder)">—</span>`;}},
+    {h:"검토 필요", n:1, f:f=>f.actions.review_needed?`<span class="mono">${f.actions.review_needed}건</span>`:`<span style="color:var(--placeholder)">—</span>`},
   ],facOrder,"");
   document.querySelectorAll("#tFactory tbody tr").forEach((tr,i)=>{
     const f=facOrder[i];
@@ -807,8 +804,8 @@ function openFac(fid){
   const rel = f.kappa/D.kappaPooled;
   document.getElementById("facModelNote").innerHTML = !f.hasMes
     ? `이 공장은 <b>자체 MES 가 FactoryOS 에 연동되지 않았다.</b> CellOS 신호는 오지만 생산·불량 정보가 오지 않으므로 ① 공장 수준은 우리 입고검사 ${f.kappaObs}건으로만 잡고,
-       ② 오더 간 차이는 거래 이력에서 온다. 그래서 <b>불일치(보고 vs 증거)는 정의되지 않고</b> 현장 방문·전화 권고가 나올 수 없다 —
-       검사 강화만 걸린다. MES 를 연동한 공장에서는 순위 정확도가 <b>0.47 → 0.85</b> 로 올랐다(유형별 실측, 8 seed).`
+       ② 오더 간 차이는 거래 이력에서 온다. 그래서 <b>불일치(보고 vs 증거)는 정의되지 않고</b> 불일치 기준의 검토 필요는 나올 수 없다 —
+       예측 위험 기준으로만 걸린다. MES 를 연동한 공장에서는 순위 정확도가 <b>0.25 → 0.85</b> 로 올랐다(유형별 실측, 8 seed).`
     : `<b>κ = (1 − 검사 검출률) ÷ 보고 편향</b> 이다. 두 값을 따로 알 필요가 없고 비만 알면 된다.
      이 공장은 전체 평균의 <b>${rel.toFixed(2)}배</b>로 보정한다 —
      ${rel>1.15?"같은 보고를 내도 더 위험하게 본다는 뜻이다. 검사를 덜 걸러내거나 축소 보고하거나, 둘 중 하나다."
@@ -919,7 +916,7 @@ function openFac(fid){
   const flagged=mine.filter(r=>r.discFlag).length;
   document.getElementById("facGapNote").innerHTML =
     `오더 ${mine.length}건 중 <b>${flagged}건</b>이 불일치 임계를 넘었다.
-     <b>한 건은 사고일 수 있지만 반복되면 습관이다</b> — 현장 방문 판단은 이 누적으로 내린다
+     <b>한 건은 사고일 수 있지만 반복되면 습관이다</b> — 공장 단위 검토 판단은 이 누적으로 내린다
      (오더 단위 불일치의 예측력은 실측 순위상관 −0.01로 사실상 없다).`;
 
   /* ── 오더 전체 ── */

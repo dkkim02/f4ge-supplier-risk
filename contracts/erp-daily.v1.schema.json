@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.f4ge.io/schemas/supplier-risk/erp-daily.v1.schema.json",
+  "title": "Supplier Risk — Factory ERP Daily Snapshot (입력, 일 1회)",
+  "description": "[신규 정의, 2026-09-08 저녁] FactoryOS 가 공장 ERP 에서 하루 한 번 가져오는 오더별 스냅샷. 자재 입출고·재고 · 재공(WIP) 잔량·공정별 재고 · 인원·잔업 · 구매 발주·외주(도금·열처리) 입고. 회계 숫자라 MES 보고보다 편향이 작다 — **MES 보고의 대조군**이다: 자재 불출·재공과 어긋나면 수량 부풀리기, 잔업이 설명되지 않으면 불량 은폐. 자재는 항상 오고 나머지는 공장마다 채우는 것이 다르다(없으면 키 자체가 없다). is_missing=true 는 일 마감을 안 한 날. datasets/generated/erp_daily.jsonl 의 한 줄.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tenant_id",
+    "order_id",
+    "factory_id",
+    "day_index",
+    "due_at",
+    "is_missing"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "supplier_risk.erp_daily.v1"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^ten_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "order_id": {
+      "type": "string",
+      "pattern": "^ord_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "factory_id": {
+      "type": "string",
+      "pattern": "^fac_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "day_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "발주 후 경과일. cell-daily.v1 의 day_index 와 같은 날."
+    },
+    "due_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reported_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "ERP 마감이 FactoryOS 에 도착한 시각. 결측이면 null."
+    },
+    "is_missing": {
+      "type": "boolean"
+    },
+    "material_issued_quantity": {
+      "type": "number",
+      "minimum": 0,
+      "description": "누적 자재 불출(원단위). 배치로 나가므로 소진보다 앞선다."
+    },
+    "material_on_hand_quantity": {
+      "type": "number",
+      "minimum": 0,
+      "description": "현장 자재 재고. 불출 − 소진. 소진 = (생산 + 폐기) × 단위 소요 — 물리량이라 MES 생산 수량의 대조군."
+    },
+    "material_lot_id": {
+      "type": "string",
+      "pattern": "^mtl_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "wip_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "재공 잔량. 생산 − 폐기 − 완성품."
+    },
+    "wip_machining_quantity": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "wip_finishing_quantity": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "wip_inspection_quantity": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "finished_goods_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "완성품 재고(양품)."
+    },
+    "headcount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "이 오더에 배정된 작업 인원(근태)."
+    },
+    "overtime_hours": {
+      "type": "number",
+      "minimum": 0,
+      "description": "잔업(근태). 불량은 적다는데 잔업이 많으면 defect_hiding."
+    },
+    "outsourcing_po_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "외주(도금·열처리) 발주 누적 수량."
+    },
+    "outsourcing_received_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "외주 입고 누적 수량."
+    }
+  },
+  "if": {
+    "properties": {
+      "is_missing": {
+        "const": true
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "reported_at": {
+        "type": "null"
+      }
+    },
+    "not": {
+      "required": [
+        "material_issued_quantity"
+      ]
+    }
+  },
+  "else": {
+    "required": [
+      "reported_at",
+      "material_issued_quantity",
+      "material_on_hand_quantity"
+    ]
+  }
+}

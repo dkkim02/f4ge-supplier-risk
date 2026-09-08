@@ -6,7 +6,6 @@
 파생값 셋은 **우리가 계산하는 L0** 이라 공장 협조가 필요 없다:
   lead_slack   = (약속 납기 − 표준 소요) / 표준 소요.  표준 소요는 제품 마스터(공칭 사이클)에서 — 생성기와 같은 식
   price_zscore = 제품군 안에서의 단가 z-score
-  load_index   = 같은 공장에서 기간이 겹치는 오더 수 − 전체 중앙값
 L0′(order_meta)는 MES 집계 행에서 generator.meta.build_meta 로 그대로 만든다.
 """
 
@@ -17,7 +16,6 @@ from typing import Any
 
 from f4ge_supplier_risk.generator.meta import build_meta
 from f4ge_supplier_risk.generator.orders import (
-    _attach_concurrency,
     _attach_price_zscore,
     _standard_days,
 )
@@ -79,7 +77,6 @@ def orders_from_contract(rows: list[dict[str, Any]], products: list[dict[str, An
         )
     out.sort(key=lambda o: o["_ordered_dt"])
     if out:
-        _attach_concurrency(out)
         _attach_price_zscore(out)
     return out
 
@@ -100,14 +97,13 @@ def reports_from_contract(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "rework_qty": int(r["rework_quantity"]), "stage": r["stage"],
             "promised_date_reported": r["promised_date_reported"], "issue_flag": bool(r["issue_flag"]),
         }
-        # T2 — 있는 것만 옮긴다. 없는 필드는 없는 채로 두어야 field_blank_count 가 맞다.
+        rec["period"] = r.get("period", "daily")
+        # 선택 필드 — 있는 것만 옮긴다. 없는 필드는 없는 채로 두어야 field_blank_count 가 맞다.
         for src, dst in (
             ("inspected_quantity", "inspected_qty"), ("inspection_type", "inspection_type"),
             ("reject_quantity", "reject_qty"), ("defect_type", "defect_type"),
-            ("material_lot_id", "material_lot_id"), ("material_supplier", "material_supplier"),
-            ("material_consumed_quantity", "material_consumed_qty"), ("machine_id", "machine_id"),
-            ("shift", "shift"), ("operator_count", "operator_count"),
-            ("overtime_hours", "overtime_hours"), ("photo_taken_at", "photo_taken_at"),
+            ("material_lot_id", "material_lot_id"), ("machine_id", "machine_id"),
+            ("shift", "shift"), ("photo_taken_at", "photo_taken_at"),
         ):
             if src in r and r[src] is not None:
                 rec[dst] = r[src]
@@ -139,6 +135,29 @@ def cell_from_contract(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def erp_from_contract(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for r in rows:
+        base = {"order_id": r["order_id"], "day_index": int(r["day_index"]), "due_at": r["due_at"],
+                "reported_at": r.get("reported_at"), "is_missing": bool(r["is_missing"])}
+        if r["is_missing"]:
+            out.append(base)
+            continue
+        rec = {**base, "material_issued_qty": float(r["material_issued_quantity"]),
+               "material_on_hand_qty": float(r["material_on_hand_quantity"])}
+        for src, dst in (
+            ("material_lot_id", "material_lot_id"), ("wip_quantity", "wip_qty"),
+            ("wip_machining_quantity", "wip_machining_qty"), ("wip_finishing_quantity", "wip_finishing_qty"),
+            ("wip_inspection_quantity", "wip_inspection_qty"), ("finished_goods_quantity", "finished_goods_qty"),
+            ("headcount", "headcount"), ("overtime_hours", "overtime_hours"),
+            ("outsourcing_po_quantity", "outsourcing_po_qty"), ("outsourcing_received_quantity", "outsourcing_received_qty"),
+        ):
+            if src in r and r[src] is not None:
+                rec[dst] = r[src]
+        out.append(rec)
+    return out
+
+
 def outcomes_from_contract(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
@@ -166,7 +185,7 @@ def meta_from_reports(orders: list[dict[str, Any]], reports: list[dict[str, Any]
 def dataset_from_contracts(
     *, products: list[dict[str, Any]], orders: list[dict[str, Any]], reports: list[dict[str, Any]],
     fai: list[dict[str, Any]], cell: list[dict[str, Any]], outcomes: list[dict[str, Any]],
-    factories: list[dict[str, Any]] | None = None,
+    erp: list[dict[str, Any]] | None = None, factories: list[dict[str, Any]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """features.build.build() 가 읽는 모양. ground_truth 는 없다 — 운영에는 정답이 없다."""
     prods = products_from_master(products)
@@ -180,5 +199,6 @@ def dataset_from_contracts(
         "factory_reports": reps,
         "fai_reports": fai_from_contract(fai),
         "cell_daily": cell_from_contract(cell),
+        "erp_daily": erp_from_contract(erp or []),
         "quality_outcomes": outcomes_from_contract(outcomes),
     }

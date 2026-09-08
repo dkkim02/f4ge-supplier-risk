@@ -18,7 +18,14 @@ def test_generate_writes_every_file(cfg, tmp_path):
     counts = generate(cfg, tmp_path)
     for name in OUT_FILES:
         assert (tmp_path / name).exists(), name
-    assert counts["orders"] == cfg["scale"]["months"] * cfg["scale"]["orders_per_month"]
+    # 한 공장에 한 오더(09-08 저녁 전제): 같은 공장의 연속 오더는 기간이 겹치지 않는다
+    assert counts["orders"] >= cfg["scale"]["factories"] * 2
+    by_fac: dict[str, list] = {}
+    for o in _rows(tmp_path / "orders.jsonl"):
+        by_fac.setdefault(o["factory_id"], []).append((_dt(o["ordered_at"]), _dt(o["promised_date"])))
+    for spans in by_fac.values():
+        spans.sort()
+        assert all(spans[i][1] <= spans[i + 1][0] for i in range(len(spans) - 1))
 
 
 def test_private_fields_never_leak(cfg, tmp_path):

@@ -16,30 +16,19 @@ import pandas as pd
 from f4ge_supplier_risk.evaluation.metrics import evaluate, split_by_time
 from f4ge_supplier_risk.features.build import LAYERS, build
 from f4ge_supplier_risk.generator.pipeline import build_dataset
-from f4ge_supplier_risk.models import baseline, discrepancy, two_stage
+from f4ge_supplier_risk.models import discrepancy, two_stage
 from f4ge_supplier_risk.prediction.score import build_scores, to_contract
 
-FULL = LAYERS["L0+Cell+MES"]
-L0 = LAYERS["L0"]
-_EPS = 1e-7
+FULL = LAYERS["L0+Cell+MES+ERP"]
 
 
 def _predict(train: pd.DataFrame, test: pd.DataFrame) -> np.ndarray:
-    """보고가 있는 오더는 2단, 없는 오더는 **2단의 공장 수준 × 1단 L0 의 공장 내 편차.**
+    """2단 모델을 전 오더에 적용한다.
 
-    보고 없는 오더에 2단만 쓰면 사전분포 × κ 라 공장 안에서 오더를 구분하지 못하고(유형 b 내부 순위 0.499 vs L0 0.534),
-    1단 L0 만 쓰면 공장 수준을 놓친다 — L0 는 학습 구간에 고정되지만 2단은 테스트 구간에서
-    κ 를 온라인 갱신해 공장 수준을 따라간다. 둘을 곱해 각자 잘하는 것만 남긴다.
-    scripts/mixed_calibration.py (8 seed, 유형 3/9): 전체 0.608 → 0.664, 7/8 seed 개선, 최악 −0.107.
-    유형 b(미연동) 0.499 → 0.586 · a 는 그대로 0.852. CellOS·FactoryOS 는 12곳 전부 있다 — 차이는 MES 연동.
+    09-08 저녁: 네 소스(MES·CellOS·ERP·포지 기록)가 12곳 전부에서 오므로 "보고 없는 오더" 분기(혼합 C)가 필요 없다.
+    1공장 1오더 데이터에서도 2단 전체 적용(0.526)이 혼합(0.433)보다 높았다(layers_by_type, 8 seed).
     """
-    p2 = two_stage.fit_predict(train, test, FULL)
-    p0 = baseline.fit_predict(train, test, L0)
-    ev = test["l1_rep_produced"].to_numpy(float) > 0
-    # 공장별 L0 기하평균으로 나누면 공장 수준이 빠지고 오더 간 편차만 남는다 (라벨을 쓰지 않는다)
-    logp0 = np.log(p0 + _EPS)
-    fac_mean = pd.Series(logp0).groupby(test["factory_id"].to_numpy()).transform("mean").to_numpy()
-    return np.where(ev, p2, p2 * np.exp(logp0 - fac_mean))
+    return two_stage.fit_predict(train, test, FULL)
 
 
 def score_all(cfg: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:

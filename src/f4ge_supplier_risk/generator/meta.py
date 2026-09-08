@@ -12,7 +12,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-T2_FIELDS = ("inspected_qty", "material_consumed_qty", "machine_id", "overtime_hours")
+# MES 선택 필드 — 공장이 채우지 않으면 빈칸. 09-08 저녁: 자재·잔업은 ERP 로 옮겨 여기서 빠졌다.
+T2_FIELDS = ("inspected_qty", "defect_type", "machine_id")
 
 
 def _dt(s: str) -> datetime:
@@ -40,9 +41,12 @@ def build_meta(order: dict[str, Any], reports: list[dict[str, Any]]) -> dict[str
         "order_id": order["order_id"],
         "report_expected": len(reports),
         "report_missing_count": sum(1 for r in reports if r["is_missing"]),
+        # 집계 주기가 공장마다 달라(일/시프트/주) 회차 수가 다르다 — 비율로도 낸다
+        "report_missing_rate": round(sum(1 for r in reports if r["is_missing"]) / len(reports), 4) if reports else 0.0,
         "report_delay_days_mean": round(sum(delays) / len(delays), 3) if delays else None,
         "report_delay_days_max": round(max(delays), 3) if delays else None,
         "field_blank_count": sum(1 for r in filed for f in T2_FIELDS if f not in r),
+        "field_blank_rate": round(sum(1 for r in filed for f in T2_FIELDS if f not in r) / (len(filed) * len(T2_FIELDS)), 4) if filed else 0.0,
         "promised_date_change_count": max(0, len(promised_seen) - 1),
         "promised_date_change_last_progress": round(last_change_progress, 3),
         "quote_response_h": order["quote_response_h"],
