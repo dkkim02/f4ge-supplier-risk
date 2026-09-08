@@ -41,12 +41,16 @@ SWEEPS: dict[str, tuple[str, tuple]] = {
     "within_factory_ar1": ("시간 자기상관", (0.0, 0.3, 0.6, 0.85)),
     "severity_critical": ("critical 비중", (0.05, 0.15, 0.25, 0.40)),
     "report_noise_cv": ("보고의 들쭉날쭉함", (0.0, 0.45, 0.9, 1.5)),
+    # 09-08 추가 — MES 하한의 아래끝. 두 상품의 비중을 정한다(docs/불일치탐지.md §4-1). 위끝은 1.0 고정.
+    "mes_input_floor": ("MES 입력 정직도 하한", (0.02, 0.3, 0.55, 0.8)),
 }
 
 
 def apply_value(cfg: dict, key: str, value: float) -> dict:
     c = copy.deepcopy(cfg)
-    if key == "severity_critical":
+    if key == "mes_input_floor":
+        c["assumptions"]["mes_input_bias_range"] = [value, 1.0]
+    elif key == "severity_critical":
         rest = 1.0 - value
         c["assumptions"]["defect_severity_mix"] = {
             "critical": value,
@@ -101,11 +105,12 @@ def main() -> None:
     all_gap: list[float] = []
 
     for key, (label, values) in SWEEPS.items():
-        base = (
-            cfg["assumptions"].get(key)
-            if key != "severity_critical"
-            else cfg["assumptions"]["defect_severity_mix"]["critical"]
-        )
+        if key == "severity_critical":
+            base = cfg["assumptions"]["defect_severity_mix"]["critical"]
+        elif key == "mes_input_floor":
+            base = cfg["assumptions"]["mes_input_bias_range"][0]
+        else:
+            base = cfg["assumptions"].get(key)
         print(f"\n── {label} ({key}, 현재값 {base}) " + "─" * 24, flush=True)
         header = f"| {key} | L0 | L0+L0′+L1 | 증분 | gap 복원 | 불합격률 |"
         print(f"  {'값':>6} {'L0':>8} {'전체':>8} {'증분':>8} {'gap':>8} {'불합격':>8}", flush=True)
