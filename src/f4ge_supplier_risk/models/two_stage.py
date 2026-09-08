@@ -125,9 +125,12 @@ def fit_predict(
     internal_test = _stage_a(train, test, cols)
 
     # 테스트 오더의 라벨이 언제 도착하는지 — 그 시점 이후에만 kappa 갱신에 쓸 수 있다
+    # 운영에서는 진행 중인 오더에 라벨이 없다(label_available_at None). 그 행은 κ 갱신에 못 쓴다 —
+    # 도착하지 않은 라벨을 쓰면 시간 규율(§5.4)을 어기는 것과 같다.
     arrivals = sorted(
         (_dt(r.label_available_at), str(r.factory_id), float(r.y_inspected), float(r.y_reject), i)
         for i, r in enumerate(test.itertuples())
+        if isinstance(r.label_available_at, str) and r.y_inspected == r.y_inspected
     )
     order = np.argsort([_dt(s) for s in test["ordered_at"]])
 

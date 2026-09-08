@@ -1,4 +1,4 @@
-"""`sr` — 생성기 CLI."""
+"""`sr` — 생성기 · 채점 · 운영 서버 CLI."""
 
 from __future__ import annotations
 
@@ -29,7 +29,59 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--targets", default="configs/calibration-targets.yaml")
     c.add_argument("--data", default="datasets/generated")
 
+    sv = sub.add_parser("serve", help="운영 서버 (FastAPI)")
+    sv.add_argument("--db", default=None, help="SQLAlchemy URL. 기본 sqlite:///data/supplier_risk.db")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8020)
+
+    sd = sub.add_parser("seed", help="생성 데이터를 계약 경로로 DB 에 넣고 admin 키를 발급")
+    sd.add_argument("--db", default=None)
+    sd.add_argument("--config", default="configs/generator.yaml")
+    sd.add_argument("--score", action="store_true", help="넣은 뒤 바로 채점")
+
+    ky = sub.add_parser("key", help="API 키 발급")
+    ky.add_argument("--db", default=None)
+    ky.add_argument("--role", choices=("admin", "site", "ingest"), required=True)
+    ky.add_argument("--label", required=True)
+    ky.add_argument("--factory", default=None, help="site 키의 공장 id")
+
+    sr_ = sub.add_parser("score-run", help="DB 의 계약 행으로 채점 1회 (cron 용)")
+    sr_.add_argument("--db", default=None)
+
     args = ap.parse_args(argv)
+
+    if args.cmd in ("serve", "seed", "key", "score-run"):
+        from f4ge_supplier_risk.web import auth, db
+
+        eng = db.connect(args.db or db.DEFAULT_URL)
+        if args.cmd == "serve":
+            import uvicorn
+
+            from f4ge_supplier_risk.web.service import create_app
+
+            uvicorn.run(create_app(eng), host=args.host, port=args.port)
+            return 0
+        if args.cmd == "seed":
+            from f4ge_supplier_risk.generator.pipeline import build_dataset
+            from f4ge_supplier_risk.web.service import seed_from_generated
+
+            counts = seed_from_generated(eng, build_dataset(config.load(args.config)))
+            for k, v in counts.items():
+                print(f"  {k:28s} {v:>7,}")
+            key = auth.issue_key(eng, "seed-admin", "admin")
+            print(f"  admin 키 (한 번만 표시): {key}")
+            if args.score:
+                from f4ge_supplier_risk.prediction.live import score_from_db
+
+                print(" ", score_from_db(eng, note="seed"))
+            return 0
+        if args.cmd == "key":
+            print(auth.issue_key(eng, args.label, args.role, args.factory))
+            return 0
+        from f4ge_supplier_risk.prediction.live import score_from_db
+
+        print(score_from_db(eng, note="cli"))
+        return 0
 
     if args.cmd == "generate":
         cfg = config.load(args.config)

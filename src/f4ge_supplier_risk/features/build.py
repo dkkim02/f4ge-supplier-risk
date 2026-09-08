@@ -30,7 +30,7 @@ def _history_features(orders: list[dict], outcomes: list[dict]) -> dict[str, dic
     """발주 시점까지 **도착한** 라벨만으로 만든 공장 이력."""
     out_by_id = {o["order_id"]: o for o in outcomes}
     events = sorted(
-        ((_dt(o["label_available_at"]), o["order_id"]) for o in outcomes),
+        ((_dt(o["label_available_at"]), o["order_id"]) for o in outcomes if o.get("label_available_at")),
         key=lambda x: x[0],
     )
     order_by_id = {o["order_id"]: o for o in orders}
@@ -67,7 +67,12 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
     outcomes = {o["order_id"]: o for o in data["quality_outcomes"]}
     meta = {m["order_id"]: m for m in data["order_meta"]}
     fai = {f["order_id"]: f for f in data["fai_reports"]}
-    truth = {t["order_id"]: t for t in data["ground_truth"]}
+    # 운영에서는 정답값이 없고, 진행 중인 오더에는 결과(입고검사)도 아직 없다.
+    # 둘 다 NaN 으로 두고 모델이 라벨 있는 행만 학습하게 한다. 생성기에서는 전부 채워진다.
+    truth = {t["order_id"]: t for t in data.get("ground_truth", [])}
+    _no_truth = {"escape_rate_true": np.nan, "internal_defect_rate_true": np.nan, "reported_vs_true_gap": np.nan}
+    _no_outcome = {"incoming_inspected_qty": np.nan, "incoming_reject_qty": np.nan, "lot_result": None,
+                   "label_available_at": None}
 
     reports_by_order: dict[str, list[dict]] = {}
     for r in data["factory_reports"]:
@@ -81,7 +86,8 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
 
     rows = []
     for o in orders:
-        oc = outcomes[o["order_id"]]
+        oc = outcomes.get(o["order_id"], _no_outcome)
+        tr = truth.get(o["order_id"], _no_truth)
         m = meta[o["order_id"]]
         reps = sorted(reports_by_order.get(o["order_id"], []), key=lambda r: r["seq"])
         filed = [r for r in reps if not r["is_missing"]]
@@ -230,12 +236,12 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                 # ── y ──
                 "y_inspected": oc["incoming_inspected_qty"],
                 "y_reject": oc["incoming_reject_qty"],
-                "y_lot_reject": float(oc["lot_result"] == "reject"),
+                "y_lot_reject": float(oc["lot_result"] == "reject") if oc["lot_result"] else np.nan,
                 "label_available_at": oc["label_available_at"],
-                # ── 진실 (평가 전용, 학습 금지) ──
-                "true_escape_rate": truth[o["order_id"]]["escape_rate_true"],
-                "true_internal_rate": truth[o["order_id"]]["internal_defect_rate_true"],
-                "true_gap": truth[o["order_id"]]["reported_vs_true_gap"],
+                # ── 진실 (평가 전용, 학습 금지) — 운영에서는 NaN ──
+                "true_escape_rate": tr["escape_rate_true"],
+                "true_internal_rate": tr["internal_defect_rate_true"],
+                "true_gap": tr["reported_vs_true_gap"],
             }
         )
 

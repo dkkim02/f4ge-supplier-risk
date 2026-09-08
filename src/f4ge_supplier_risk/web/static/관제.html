@@ -400,8 +400,27 @@ tbody tr.rowlink { cursor: pointer; }
 
 <script type="application/json" id="d">__DATA__</script>
 <script>
-(() => {
-const D = JSON.parse(document.getElementById("d").textContent);
+(async () => {
+// 정적 발행본은 데이터가 임베드돼 있고(__DATA__ 자리), 서버가 내주는 페이지는 __LIVE__ 라 /api/dashboard 에서 받는다.
+// 키는 ?key= 로 한 번 받아 localStorage 에 두고 헤더로 보낸다. 서버가 역할별로 잘라 주므로 화면은 필터를 믿지 않는다.
+const raw = document.getElementById("d").textContent.trim();
+let D;
+if (raw === "__LIVE__") {
+  const url = new URL(location.href);
+  if (url.searchParams.get("key")) { try { localStorage.setItem("sr_key", url.searchParams.get("key")); } catch (e) {}
+    url.searchParams.delete("key"); history.replaceState(null, "", url.toString()); }
+  let key = null; try { key = localStorage.getItem("sr_key"); } catch (e) {}
+  const res = await fetch("/api/dashboard", { headers: key ? { "X-API-Key": key } : {} });
+  if (!res.ok) {
+    document.querySelector("main").innerHTML = `<div class="card"><div class="card-body">
+      <div class="card-title">${res.status === 401 ? "API 키가 필요합니다" : res.status === 404 ? "채점 결과가 아직 없습니다" : "불러오지 못했습니다 (" + res.status + ")"}</div>
+      <div class="card-sub">${res.status === 401 ? "주소 뒤에 ?key=발급받은키 를 붙여 한 번 열면 저장됩니다." : res.status === 404 ? "관리자가 POST /api/score/run 을 실행하면 나타납니다." : ""}</div></div></div>`;
+    return;
+  }
+  D = await res.json();
+} else {
+  D = JSON.parse(raw);
+}
 const R = D.rows, F = D.factories;
 const tip = document.getElementById("tip");
 const NS = "http://www.w3.org/2000/svg";
@@ -458,6 +477,10 @@ function showTip(e,t){ tip.textContent=t; tip.style.opacity=1;
   tip.style.left=x+"px"; tip.style.top=y+"px"; }
 const hideTip = ()=>tip.style.opacity=0;
 
+if (D.role === "site" && D.factories.length) {
+  document.getElementById("tabAdmin").classList.add("hidden");
+  // 화면은 서버가 준 공장 하나만 안다 — 다른 공장은 데이터 자체가 없다
+}
 document.getElementById("stamp").textContent =
   `${D.today} · 오더 ${fmt(D.metrics.orders)}건 · 진행 중 ${inflight.length}건`;
 document.getElementById("coverage").innerHTML =
@@ -935,7 +958,7 @@ document.getElementById("tabSite").onclick = ()=>setRole(false);
 facSel.onchange = ()=>renderSite(facSel.value);
 // 신뢰도가 가장 낮은 공장을 현장 화면 기본값으로 — 두 화면의 차이가 드러난다
 facSel.value = [...F].sort((a,b)=>b.disc-a.disc)[0].id;
-setRole(true);
+setRole(D.role !== "site"); // 현장 계정은 바로 현장 화면 — 관리자 탭은 숨겨져 있다
 })();
 </script>
 

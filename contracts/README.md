@@ -34,6 +34,11 @@ FactoryOS 계약에서 그대로: ISO-8601 UTC 문자열(epoch ms 금지) · id 
 - 파생값은 계약에 넣지 않는다 — `lead_slack` `price_zscore` `load_index` 는 원값에서 피처 빌더가 만든다.
 - `tenant_id` 는 생성기에 없다 — 번역기가 `ten_f4ge` 를 채운다. 실서비스에서는 수신 측이 채운다.
 
+## 들어오는 길
+
+`POST /api/ingest/{계약이름}` 에 행 배열을 보낸다(`X-API-Key`, 역할 ingest·admin). 스키마 위반이 하나라도 있으면 배치 전체 422.
+같은 키(order_id · seq 등)의 행은 새 것으로 덮는다. → `docs/운영서버.md`
+
 ## 검증
 
 ```

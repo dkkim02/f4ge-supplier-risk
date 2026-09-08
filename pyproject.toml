@@ -10,10 +10,13 @@ dependencies = [
   "scikit-learn>=1.5",
   "pyyaml>=6.0",
   "jsonschema>=4.22",
+  "fastapi>=0.116.0",
+  "uvicorn[standard]>=0.35.0",
+  "sqlalchemy>=2.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=8.0", "ruff>=0.6", "httpx>=0.27"]
 
 [project.scripts]
 sr = "f4ge_supplier_risk.cli:main"

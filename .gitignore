@@ -8,3 +8,4 @@ datasets/generated/*
 !datasets/generated/.gitkeep
 /models/
 .DS_Store
+/data/
