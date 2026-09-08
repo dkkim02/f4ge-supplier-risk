@@ -104,7 +104,11 @@ def _structural(data: Path) -> list[tuple[str, bool, str]]:
     fai = _load(data / "fai_reports.jsonl")
     outcomes = _load(data / "quality_outcomes.jsonl")
     orders = _load(data / "orders.jsonl")
-    bias_by_fac = {f["factory_id"]: f["report_bias"] for f in factories}
+    # 실효 편향. MES 하한(`mes_input_bias`)이 의도(`report_bias`)보다 높으면
+    # 하한이 구속되므로 격차를 정하는 것은 둘 중 큰 쪽이다.
+    bias_by_fac = {
+        f["factory_id"]: max(f["report_bias"], f["mes_input_bias"]) for f in factories
+    }
     fac_of = {o["order_id"]: o["factory_id"] for o in orders}
 
     out: list[tuple[str, bool, str]] = []
@@ -126,7 +130,7 @@ def _structural(data: Path) -> list[tuple[str, bool, str]]:
         [bias_by_fac[fac_of[t["order_id"]]] for t in truth if t["reported_vs_true_gap"] is not None]
     )
     r = float(np.corrcoef(bias, gaps)[0, 1])
-    out.append(("report_bias 가 낮을수록 격차가 크다", r < -0.05, f"r = {r:+.3f}"))
+    out.append(("실효 편향 max(report_bias, mes_input_bias) 이 낮을수록 격차가 크다", r < -0.05, f"r = {r:+.3f}"))
 
     # 3. FAI 공차 여유가 내부 불량률과 음의 상관인가 (10% 시점 신호가 살아 있는가)
     tmap = {t["order_id"]: t["internal_defect_rate_true"] for t in truth}

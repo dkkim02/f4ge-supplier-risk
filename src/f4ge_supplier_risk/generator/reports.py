@@ -134,14 +134,12 @@ def build_reports(
         # 노이즈가 없으면 보고가 진짜 불량률을 지나치게 잘 대표해서, 보고를 쓰는 모델의
         # 성능이 실제보다 좋게 나온다. 대충 센 것 · 사람마다 다른 기준 ·
         # 형식적으로 채워 넣은 숫자가 전부 여기 들어간다.
+        # 하한은 MES 가 정한다. 공장이 아무리 줄여 찍고 싶어도 재고가 안 맞으면
+        # 들통나므로 어느 선 아래로는 못 내려간다 — 그 선이 `mes_input_bias` 다.
+        # 사람이 쓰던 주간 보고에는 이 하한이 없었다(옛 값 0.02).
         noise = float(rng.lognormal(0.0, cfg["assumptions"]["report_noise_cv"]))
-        shrink = float(
-            np.clip(
-                factory["report_bias"] * (1.0 - factory["bias_sensitivity"] * trouble) * noise,
-                0.02,
-                2.0,
-            )
-        )
+        intent = factory["report_bias"] * (1.0 - factory["bias_sensitivity"] * trouble) * noise
+        shrink = float(np.clip(intent, factory["mes_input_bias"], 2.0))
         mech["shrink_min"] = min(mech["shrink_min"], shrink)
         rep_scrap = round(float(true_c["scrap"] * min(1.0, shrink + 0.35)))  # 폐기는 감추기 어렵다
         rep_rework = round(float(true_c["rework"] * shrink))  # 재작업이 가장 감추기 쉽다
