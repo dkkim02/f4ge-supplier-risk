@@ -60,6 +60,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     all_outcomes: list[dict[str, Any]] = []
     all_meta: list[dict[str, Any]] = []
     all_truth: list[dict[str, Any]] = []
+    all_cell: list[dict[str, Any]] = []
 
     for o in order_rows:
         factory = fac_by_id[o["factory_id"]]
@@ -72,6 +73,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         truth = production.build_truth(cfg, o, factory, lat)
 
         rep, mech = reports.build_reports(cfg, o, factory, product, lat, truth)
+        all_cell.extend(reports.build_cell_daily(cfg, o, factory, lat, truth))
         fai = reports.build_fai(cfg, o, factory, lat, truth)
         outcome = labels.build_outcome(cfg, o, truth, lat)
 
@@ -116,7 +118,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         "order_meta": all_meta,
         "factory_reports": all_reports,
         "fai_reports": all_fai,
-        "cell_daily": [],  # L2 — 설치 공장 0곳. 스키마 자리만 잡아 둔다
+        "cell_daily": all_cell,  # L2 — has_cell 공장만
         "quality_outcomes": all_outcomes,
         "ground_truth": all_truth,
     }

@@ -66,8 +66,12 @@ def build_reports(
     """
     rng = stream(cfg["seed"], "report", order["order_id"])
     qty = order["order_qty"]
-    interval = cfg["scale"]["report_interval_days"]
+    interval = cfg["scale"]["mes_interval_days"]
     n_reports = max(2, int(np.ceil(truth["actual_days"] / interval)))
+    # MES/FactoryOS 가 없는 공장은 생산·불량 정보가 아예 오지 않는다.
+    # 결측이 아니라 **경로가 없는 것**이고, 그것이 유형 b·c 의 정의다.
+    if not factory["has_mes"]:
+        return [], _empty_mech()
 
     # 이 오더가 얼마나 곤란한가 (0~1). 지연·결측·편향이 전부 이 값을 따라간다.
     trouble = float(
@@ -100,7 +104,9 @@ def build_reports(
         true_c = counts_at(truth, qty, progress)
 
         # ── 결측: 곤란하고 규율이 낮은 공장이 회차를 통째로 빠뜨린다 ──
-        p_missing = (1.0 - factory["report_discipline"]) * (0.10 + 0.35 * trouble)
+        # API 는 사람이 빠뜨리지 않는다. 다만 연결이 끊긴다 —
+        # 네트워크·게이트웨이 정지·설비 전원. 그것이 유일한 결측 경로다.
+        p_missing = (1.0 - factory["report_discipline"]) * 0.06
         if rng.random() < p_missing:
             out.append(
                 {
@@ -168,8 +174,8 @@ def build_reports(
         if trouble > 0.35 and not row["issue_flag"]:
             mech["issue_suppressed"] += 1
 
-        # ── T2: t2_compliance 확률로만 채워진다 ──
-        if rng.random() < factory["t2_compliance"]:
+        # ── MES 가 함께 올리는 값들. 있는 공장은 항상 온다(사람 손이 아니다) ──
+        if True:
             insp = round(float(true_c["produced"] * float(rng.uniform(0.3, 1.0))))
             true_found = true_c["scrap"] + true_c["rework"]
             row |= {
@@ -203,6 +209,61 @@ def build_reports(
     return out, mech
 
 
+def _empty_mech() -> dict[str, float]:
+    return {
+        "inflation_max": 0.0,
+        "shrink_min": 1.0,
+        "promise_stale_days": 0.0,
+        "issue_suppressed": 0,
+        "photo_reused": 0,
+    }
+
+
+def build_cell_daily(
+    cfg: dict[str, Any],
+    order: dict[str, Any],
+    factory: dict[str, Any],
+    latents: dict[str, float],
+    truth: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """L2 — CellOS 설비 신호. 사람 손이 닿지 않으므로 편향이 없다.
+
+    가동률·사이클타임·이상 이벤트는 설비가 직접 올린다. 그래서 이 값들은
+    **교차검증의 증거 쪽**으로 쓸 수 있다 — 보고 수량이 가동시간 x 사이클타임과
+    맞지 않으면 물리적으로 불가능한 보고다.
+    """
+    if not factory["has_cell"]:
+        return []
+    rng = stream(cfg["seed"], "cell", order["order_id"])
+    days = max(1, int(np.ceil(truth["actual_days"])))
+    out = []
+    for d in range(days):
+        prog = progress_at(truth, d + 1)
+        # 나쁜 상태일수록 가동률이 떨어지고 이상 이벤트가 늘어난다
+        trouble = float(
+            np.clip(
+                0.5 * latents["state_t"] + 3.0 * (latents["internal_defect_rate_true"] - 0.03), 0, 1
+            )
+        )
+        out.append(
+            {
+                "order_id": order["order_id"],
+                "day_index": d,
+                "uptime_ratio": round(
+                    float(np.clip(rng.normal(0.78 - 0.15 * trouble, 0.08), 0.1, 1.0)), 4
+                ),
+                "cycle_time_median": round(
+                    float(order["_std_days"] * 0 + rng.normal(1.0, 0.05) * (1.0 + 0.12 * trouble)),
+                    4,
+                ),
+                "anomaly_event_count": int(rng.poisson(0.4 + 2.5 * trouble)),
+                "tool_change_count": int(rng.poisson(0.3)),
+                "produced_by_counter": round(float(order["order_qty"] * prog)),
+            }
+        )
+    return out
+
+
 def build_fai(
     cfg: dict[str, Any],
     order: dict[str, Any],
@@ -217,7 +278,9 @@ def build_fai(
     없으면 공구가 마모될수록 넘어간다.
     """
     rng = stream(cfg["seed"], "fai", order["order_id"])
-    if rng.random() > factory["t2_compliance"] * 0.9:
+    # FAI 는 유형과 무관하다 — 고객 요구사항이라 MES 가 없는 공장도 만든다.
+    # 그리고 MES 에 치수 측정값은 없으므로 이것만이 오더 초반의 상세 신호다.
+    if rng.random() > cfg["assumptions"]["fai_submit_rate"]:
         return None
 
     n_dim = int(rng.integers(8, 25))

@@ -72,6 +72,9 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
     reports_by_order: dict[str, list[dict]] = {}
     for r in data["factory_reports"]:
         reports_by_order.setdefault(r["order_id"], []).append(r)
+    cell_by_order: dict[str, list[dict]] = {}
+    for c in data["cell_daily"]:
+        cell_by_order.setdefault(c["order_id"], []).append(c)
 
     hist = _history_features(orders, data["quality_outcomes"])
     products = {p["product_id"]: p for p in data["products"]}
@@ -86,9 +89,11 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
         t2 = [r for r in filed if "inspected_qty" in r]
 
         # ── L1 — 공장이 준 것. 전부 편향이 걸려 있다 ──
+        # MES/FactoryOS 가 없는 공장은 이 값이 **아예 오지 않는다.**
+        # 0 으로 채우면 "불량 없음" 과 구분되지 않는다.
         rep_defects = last.get("scrap_qty", 0) + last.get("rework_qty", 0)
         rep_produced = last.get("produced_qty", 0) or 1
-        rep_rate = rep_defects / rep_produced
+        rep_rate = (rep_defects / rep_produced) if filed else np.nan
 
         # 교차검증 쌍: 보고 수량 vs 자재 소진. 수량을 부풀리면 여기가 어긋난다
         # 마지막 회차만 보면 안 된다 — 부풀리기는 특정 회차에서 일어나고
@@ -147,6 +152,24 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
             ot = float(np.mean([r["overtime_hours"] for r in t2]))
             ot_vs_reject = ot / (rep_rate * 100.0 + 0.3)
 
+        # ── L2 — CellOS 설비 신호. 사람 손이 닿지 않아 편향이 없다 ──
+        cells = sorted(cell_by_order.get(o["order_id"], []), key=lambda c: c["day_index"])
+        if cells:
+            up = np.array([c["uptime_ratio"] for c in cells], dtype=float)
+            ct = np.array([c["cycle_time_median"] for c in cells], dtype=float)
+            cell_uptime = float(up.mean())
+            cell_uptime_min = float(up.min())
+            cell_ct_cv = float(ct.std() / max(ct.mean(), 1e-9))
+            cell_anom = float(sum(c["anomaly_event_count"] for c in cells))
+            cell_anom_rate = cell_anom / len(cells)
+            cell_tool = float(sum(c["tool_change_count"] for c in cells))
+            # ★ 교차검증: 보고 수량 vs 설비 카운터. 물리적으로 어긋날 수 없는 대조다
+            counter = float(cells[-1]["produced_by_counter"])
+            counter_gap = (rep_produced - counter) / max(counter, 1.0) if last else np.nan
+        else:
+            cell_uptime = cell_uptime_min = cell_ct_cv = np.nan
+            cell_anom = cell_anom_rate = cell_tool = counter_gap = np.nan
+
         f = fai.get(o["order_id"])
         rows.append(
             {
@@ -190,6 +213,13 @@ def build(data: dict[str, list[dict[str, Any]]]) -> pd.DataFrame:
                     else np.nan
                 ),
                 "l1_material_gap": mat_gap,
+                # ── L2 ──
+                "l2_uptime_mean": cell_uptime,
+                "l2_uptime_min": cell_uptime_min,
+                "l2_cycle_cv": cell_ct_cv,
+                "l2_anomaly_rate": cell_anom_rate,
+                "l2_tool_changes": cell_tool,
+                "l2_counter_gap": counter_gap,
                 "l1_pace_gap": pace_gap,
                 "l1_silent_delay": silent_delay,
                 "l1_photo_stale": photo_stale,
@@ -260,8 +290,29 @@ L1_COLS = (
     "l1_fai_submitted",
 )
 
+# L2 — CellOS 설비 신호. 편향이 없다.
+L2_COLS = (
+    "l2_uptime_mean",
+    "l2_uptime_min",
+    "l2_cycle_cv",
+    "l2_anomaly_rate",
+    "l2_tool_changes",
+    "l2_counter_gap",
+)
+
+# FAI 는 유형과 무관하게 온다(고객 요구사항). MES 계층과 분리해 둔다 —
+# 설치 가치를 재려면 "FAI 만 있는 상태" 를 따로 볼 수 있어야 한다.
+FAI_COLS = ("l1_fai_margin_min", "l1_fai_out_of_tol", "l1_fai_submitted")
+
+# MES/FactoryOS 가 주는 생산·불량 정보.
+MES_COLS = tuple(c for c in L1_COLS if c not in FAI_COLS)
+
+# ★ 계층이 곧 **설치 단계**다. 세 숫자가 설치 가치를 말한다.
 LAYERS = {
-    "L0": L0_COLS,
+    "L0": L0_COLS + L0M_COLS + FAI_COLS,
+    "L0+Cell": L0_COLS + L0M_COLS + FAI_COLS + L2_COLS,
+    "L0+Cell+MES": L0_COLS + L0M_COLS + FAI_COLS + L2_COLS + MES_COLS,
+    # 하위 호환 — 기존 실험 스크립트가 쓴다
     "L0+L0′": L0_COLS + L0M_COLS,
-    "L0+L0′+L1": L0_COLS + L0M_COLS + L1_COLS,
+    "L0+L0′+L1": L0_COLS + L0M_COLS + L1_COLS + L2_COLS,
 }

@@ -69,7 +69,15 @@ def _measure(cfg: dict[str, Any], data: Path) -> dict[str, float]:
         "transit_days_us_west": float(cfg["market_transit_days"]["us_west"]),
         "transit_days_us_east": float(cfg["market_transit_days"]["us_east"]),
         "transit_days_europe": float(cfg["market_transit_days"]["eu"]),
-        "report_interval_days": float(cfg["scale"]["report_interval_days"]),
+        "mes_interval_days": float(cfg["scale"]["mes_interval_days"]),
+        "cell_coverage": float(
+            sum(1 for f in _load(data / "factories.jsonl") if f["has_cell"])
+            / max(len(_load(data / "factories.jsonl")), 1)
+        ),
+        "mes_coverage": float(
+            sum(1 for f in _load(data / "factories.jsonl") if f["has_mes"])
+            / max(len(_load(data / "factories.jsonl")), 1)
+        ),
     }
 
 

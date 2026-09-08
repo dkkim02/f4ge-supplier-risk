@@ -48,8 +48,20 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
     seed = cfg["seed"]
     a = cfg["assumptions"]
     n_fac = cfg["scale"]["factories"]
-    installed = set(cfg["telemetry"]["installed_factories"])
     per_product = n_fac // len(products)
+
+    # 공장 유형. 계측 수준이 공장마다 다르다.
+    #   a  생산·불량 + 설비 신호 (MES 보유 또는 FactoryOS 입력 + CellOS)
+    #   b  설비 신호만 (CellOS 만 설치, 생산·불량 입력 경로 없음)
+    #   c  아무것도 없음 — L0 만
+    ft = cfg["factory_types"]
+    pool = ["a"] * ft["a"] + ["b"] * ft["b"] + ["c"] * ft["c"]
+    # 제품군을 가로질러 나눠준다. 한 제품군의 세 곳이 전부 같은 유형이면
+    # "같은 제품 안에서 유형을 비교" 하는 것이 불가능해진다.
+    n_group = n_fac // per_product  # 제품군 수
+    types = [""] * n_fac
+    for j, t in enumerate(pool):
+        types[(j % n_group) * per_product + (j // n_group)] = t
 
     out = []
     for idx in range(n_fac):
@@ -65,7 +77,6 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
         detection = float(lo + (hi - lo) * rng.beta(6.0, 2.0))
 
         disc_lo, disc_hi = a["report_discipline_range"]
-        t2_lo, t2_hi = a["t2_compliance_range"]
 
         capability = float(rng.normal(0.0, a["factory_capability_sd"]))
         capability_z = capability / max(a["factory_capability_sd"], 1e-9)
@@ -96,8 +107,11 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
                 ),
                 "bias_sensitivity": float(rng.uniform(0.0, 2.0 * a["bias_sensitivity"])),
                 "report_discipline": float(rng.uniform(disc_lo, disc_hi)),
-                "t2_compliance": float(rng.uniform(t2_lo, t2_hi)),
-                "telemetry_installed": fid in installed,
+                "factory_type": types[idx],
+                "has_mes": types[idx] == "a",  # 생산·불량 정보가 오는가
+                "has_cell": types[idx] in ("a", "b"),  # 설비 신호가 오는가
+                # MES 입력 단계의 편향. 폐기·재작업 판정은 사람이 하므로 남는다.
+                "mes_input_bias": float(rng.uniform(*a["mes_input_bias_range"])),
             }
         )
     return out

@@ -25,12 +25,16 @@ def test_reported_defects_are_understated(cfg, world):
 
 def test_material_consumption_is_not_biased(cfg, world):
     """자재 소진은 물리량이라 실제값을 따라간다 — 수량 부풀리기의 대조군."""
-    order, factory, product, lat, truth = world[0]
+    # MES 가 있는 공장을 골라야 한다 — 없는 공장은 보고가 아예 오지 않는다.
+    picked = next((w for w in world if w[1]["has_mes"]), None)
+    if picked is None:
+        return
+    order, factory, product, lat, truth = picked
     rows, _ = reports.build_reports(cfg, order, factory, product, lat, truth)
-    for r in rows:
-        if r["is_missing"] or "material_consumed_qty" not in r:
-            continue
-        assert r["material_consumed_qty"] > 0
+    seen = [r for r in rows if not r["is_missing"] and "material_consumed_qty" in r]
+    assert seen, "MES 공장인데 보고가 없다"
+    # 일 단위 집계라 초반 회차는 셋업 구간이고 생산이 0 이다. 마지막 회차로 본다.
+    assert seen[-1]["material_consumed_qty"] > 0
 
 
 def test_missing_reports_carry_no_numbers(cfg, world):

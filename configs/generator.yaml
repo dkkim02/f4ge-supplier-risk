@@ -4,12 +4,24 @@
 
 seed: 20260907
 
+# 공장 유형 — 계측 수준이 공장마다 다르다. 이 이질성이 이 프로젝트의 난이도이자
+# 설치 가치를 측정할 수 있게 하는 구조다(2026-09-08 확정).
+#   type_a  MES 보유 + CellOS/FactoryOS 설치  -> 생산·불량 + 설비 신호 전부
+#   type_b  설치만 (MES 없음)                 -> 설비 신호 + FactoryOS 가 입력 경로
+#   type_c  아무것도 없음                     -> L0 만
+factory_types:
+  a: 3
+  b: 4
+  c: 5
+
 scale:
-  factories: 12            # 제품군 4종 x 3곳
+  factories: 12            # 제품군 4종 x 3곳 (= a+b+c)
   products: 4
   months: 36               # 현실 규모(18개월/450건)로는 평가 불가 — 명세 §6
   orders_per_month: 25
-  report_interval_days: 7  # 소싱 에이전트 표준 실무
+  # MES/Cell 은 API 로 온다. 사람이 채우는 주간 보고가 아니다.
+  mes_interval_days: 1     # 일 단위 집계
+  fai_per_order: 1         # 오더당 1회. 고객 요구사항이라 유형과 무관하게 제출된다
 
 order:
   qty_lognormal_median: 800     # CNC 수요의 49%가 5,000개 미만 배치
@@ -54,10 +66,14 @@ assumptions:
   # ⚠ 관측으로 확인할 수 없다 — CTO 확인 항목 22번.
   bias_capability_corr: 0.0
   report_discipline_range: [0.3, 0.95]
-  t2_compliance_range: [0.0, 0.9]
+  # MES 입력 단계의 편향. 폐기·재작업 판정은 사람이 하므로 남는다.
+  # 다만 보고서를 꾸미는 것보다 어렵다 — MES 에 안 찍으면 재고가 안 맞는다.
+  mes_input_bias_range: [0.55, 1.0]
+  fai_submit_rate: 0.85    # 고객 요구사항이라 높다
   # 유출 불량의 심각도 구성. **실측 근거 없음** — 다만 로트 불합격률을
   # 실무 범위(1~10%)로 만드는 것은 critical 비중이지 major AQL 이 아니다.
   defect_severity_mix: { critical: 0.25, major: 0.50, minor: 0.25 }
 
 telemetry:
-  installed_factories: []              # 지금은 0곳. 스키마만 유지
+  # a·b 유형에 설치돼 있다. masters.py 가 factory_types 에서 유도한다.
+  cell_sample_interval_min: 60
