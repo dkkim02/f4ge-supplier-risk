@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         scored, trust, metrics = score_all(config.load(args.config))
         n = write_scores(scored, Path(config.REPO_ROOT) / args.out)
         print(
-            f"  채점 {n:,}건  ·  순위상관 {metrics['rank_corr_true']:+.3f}"
+            f"  채점 {n:,}건  ·  Spearman 상관 {metrics['rank_corr_true']:+.3f}"
             f"  ·  예상 중앙 {metrics['pred_ppm_median']:.0f} PPM"
         )
         for a, k in scored["recommended_action"].value_counts().items():

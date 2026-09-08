@@ -49,7 +49,7 @@ def test_no_evidence_covers_the_unverifiable(table):
 
 
 def test_threshold_comes_from_train_only(table):
-    """임계를 테스트 분포에서 잡으면 현실에서 쓸 수 없는 값이 된다."""
+    """threshold를 테스트 분포에서 잡으면 현실에서 쓸 수 없는 값이 된다."""
     tr, te = split_by_time(table)
     a = discrepancy.reasons(tr, te)["reason_primary"].tolist()
     b = discrepancy.reasons(tr, te.iloc[:40])["reason_primary"].tolist()

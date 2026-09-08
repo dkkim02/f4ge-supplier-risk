@@ -6,7 +6,7 @@
 주 지표는 둘이다.
   · `rank_corr_true`  — 예측 위험도가 **진짜 escape rate** 순서를 얼마나 맞히나.
     합성 데이터에서만 잴 수 있고, 그래서 ground_truth 를 따로 만들어 둔 것이다.
-  · `binom_logloss`   — 관측된 (k, n) 에 대한 유닛당 이항 로그손실. 실데이터에서도 잰다.
+  · `binom_logloss`   — 관측된 (k, n) 에 대한 유닛당 binomial log loss. 실데이터에서도 잰다.
 """
 
 from __future__ import annotations
