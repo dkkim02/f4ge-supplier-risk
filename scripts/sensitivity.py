@@ -32,7 +32,8 @@ from f4ge_supplier_risk.features.build import LAYERS, build
 from f4ge_supplier_risk.generator.pipeline import build_dataset
 from f4ge_supplier_risk.models import baseline, two_stage
 
-SEEDS = (20260907, 11, 4242)
+# 09-08: 3 → 8 seed. 2단 모델 seed 편차가 ±0.2 라 3 seed 로는 인접 수준을 구분하지 못했다.
+SEEDS = (20260907, 11, 4242, 7, 101, 2026, 31337, 909)
 
 SWEEPS: dict[str, tuple[str, tuple]] = {
     "factory_capability_sd": ("공장 간 품질 분산", (0.5, 1.0, 1.5, 2.0)),
@@ -103,8 +104,11 @@ def main() -> None:
     lines: list[str] = []
     all_delta: list[float] = []
     all_gap: list[float] = []
+    # 축을 인자로 고를 수 있다 — 7축 × 4값 × 8 seed 는 한 프로세스로 15분이 넘어 둘로 나눠 돈다.
+    keys = [k for k in sys.argv[1:] if k in SWEEPS] or list(SWEEPS)
 
-    for key, (label, values) in SWEEPS.items():
+    for key in keys:
+        label, values = SWEEPS[key]
         if key == "severity_critical":
             base = cfg["assumptions"]["defect_severity_mix"]["critical"]
         elif key == "mes_input_floor":
@@ -155,7 +159,8 @@ def main() -> None:
         f"gap 복원 {sum(g > 0 for g in all_gap)}/{n_cfg} (최악 {min(all_gap):+.3f})"
     )
 
-    out = Path(__file__).resolve().parents[1] / "docs" / "_민감도_표.md"
+    tag = "" if len(keys) == len(SWEEPS) else "_" + "_".join(keys)
+    out = Path(__file__).resolve().parents[1] / "docs" / f"_민감도_표{tag}.md"
     out.write_text("\n".join(lines), encoding="utf-8")
     print(f"\n표 저장: {out.relative_to(out.parents[2])}")
 
