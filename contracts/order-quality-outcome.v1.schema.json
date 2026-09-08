@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.f4ge.io/schemas/supplier-risk/order-quality-outcome.v1.schema.json",
+  "title": "Supplier Risk — Order Quality Outcome (라벨)",
+  "description": "[신규 정의] 오더 1건의 최종 품질 결과 — 우리(또는 고객)의 입고검사와 클레임. **모델의 정답값(y)이고 우리가 소유한다.** 입고검사는 AQL 표본검사(ISO 2859-1)라 관측은 `표본 n 중 불합격 k` 인 이항 관측이다 → y 는 Beta-Binomial. label_available_at 이 이 계약의 핵심 필드다 — 그 시각 이전에는 모델이 이 행을 볼 수 없다(시간 규율). 클레임은 수개월 뒤에 희소하게 오므로 주 타깃이 아니다. datasets/generated/quality_outcomes.jsonl 의 한 줄.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tenant_id",
+    "order_id",
+    "factory_id",
+    "inspected_quantity",
+    "reject_quantity",
+    "lot_result",
+    "label_available_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "supplier_risk.order_quality_outcome.v1"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^ten_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "order_id": {
+      "type": "string",
+      "pattern": "^ord_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "factory_id": {
+      "type": "string",
+      "pattern": "^fac_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "shipped_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "출하 시각."
+    },
+    "arrived_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "도착 시각. 납품처별 운송일(18/30/60일)이 여기 들어간다."
+    },
+    "aql_code": {
+      "type": "string",
+      "pattern": "^[A-R]$",
+      "description": "ISO 2859-1 표본 크기 코드 문자."
+    },
+    "inspected_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "표본 n. **표본 크기 가중이 필수** — 32개에서 0 과 200개에서 0 은 다른 정보다."
+    },
+    "reject_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "불합격 k. 대부분 0 이다 — escape 중앙 0.1% × 표본 200 = 기대 0.2개."
+    },
+    "reject_critical": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reject_major": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reject_minor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "accept_number_major": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "합격 판정 수(Ac). 이 수를 넘으면 로트 불합격."
+    },
+    "lot_result": {
+      "type": "string",
+      "enum": [
+        "accept",
+        "reject"
+      ]
+    },
+    "reject_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "critical",
+        "major",
+        "minor",
+        null
+      ],
+      "description": "불합격 사유 — 어느 심각도가 판정을 넘었나. critical 은 1개라도 있으면 불합격(Ac=0)."
+    },
+    "inspected_by": {
+      "type": "string",
+      "enum": [
+        "f4ge",
+        "customer",
+        "third_party"
+      ],
+      "description": "09-08 CTO 확인: 우리 검사 + 고객 검사 둘 다 온다. 표본수·불합격수·불량유형까지."
+    },
+    "label_available_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "이 결과를 우리가 알게 된 시각. **이 시각 이후에만 학습·κ 갱신에 쓸 수 있다.**"
+    },
+    "claim_occurred": {
+      "type": "boolean"
+    },
+    "claim_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "claim_quantity": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "claim_cost": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "클레임 비용. 지금 생성기 값(수량 × 단가 × 1.5~4배)은 가정이다 — CTO 질문 28."
+    }
+  }
+}

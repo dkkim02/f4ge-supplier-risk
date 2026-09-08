@@ -1,0 +1,2 @@
+{"schema_version": "supplier_risk.cell_daily.v1", "tenant_id": "ten_f4ge", "order_id": "ord_00001", "factory_id": "fac_kr_01", "day_index": 0, "uptime_ratio": 0.7659, "cycle_time_median": 1.047, "anomaly_event_count": 0, "tool_change_count": 0, "produced_by_counter": 0}
+{"schema_version": "supplier_risk.cell_daily.v1", "tenant_id": "ten_f4ge", "order_id": "ord_00001", "factory_id": "fac_kr_01", "day_index": 1, "uptime_ratio": 0.8138, "cycle_time_median": 1.1188, "anomaly_event_count": 1, "tool_change_count": 1, "produced_by_counter": 0}

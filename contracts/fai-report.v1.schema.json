@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.f4ge.io/schemas/supplier-risk/fai-report.v1.schema.json",
+  "title": "Supplier Risk — First Article Inspection (입력)",
+  "description": "[신규 정의] 초도품 검사 결과 — 첫 물건의 전 치수 실측. 오더 초반(10% 시점)에 볼 수 있는 유일한 상세 신호이고, 고객 요구사항이라 공장 유형(MES 유무)과 무관하게 온다(09-08 CTO 확인, 제출률 가정 0.85). 양식은 AS9102 Form 3 이 사실상 국제 기준 — 치수별 실측치 대신 **공차 여유(margin)의 요약**만 담는다: margin = (공차 − |실측 − 공칭|) / 공차, 음수면 공차 밖. datasets/generated/fai_reports.jsonl 의 한 줄.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tenant_id",
+    "order_id",
+    "factory_id",
+    "fai_at",
+    "dim_count",
+    "margin_min",
+    "out_of_tol_count"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "supplier_risk.fai_report.v1"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^ten_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "order_id": {
+      "type": "string",
+      "pattern": "^ord_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "factory_id": {
+      "type": "string",
+      "pattern": "^fac_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "fai_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "검사 시각."
+    },
+    "dim_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "측정한 치수 수(AS9102 Form 3 행 수)."
+    },
+    "margin_min": {
+      "type": "number",
+      "maximum": 1,
+      "description": "가장 여유 없는 치수의 공차 여유. **내부 불량률과 음의 상관 −0.81** — 이 값 하나가 10% 시점 예측을 만든다."
+    },
+    "margin_mean": {
+      "type": "number",
+      "maximum": 1
+    },
+    "margin_p25": {
+      "type": "number",
+      "maximum": 1
+    },
+    "out_of_tol_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "공차 밖 치수 수. 0 이 아니면 초도품 불합격."
+    },
+    "form_ref": {
+      "type": "string",
+      "description": "원 양식 참조(AS9102 Form 3 파일·페이지). 실측치 원본은 여기 있다."
+    },
+    "inspected_by": {
+      "type": "string",
+      "enum": [
+        "factory",
+        "f4ge",
+        "third_party"
+      ],
+      "description": "공장 자체 / 우리 대행 / 제3자(CMM 없는 공장 — CTO 질문 26~28)."
+    }
+  }
+}

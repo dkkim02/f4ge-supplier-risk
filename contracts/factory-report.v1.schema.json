@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.f4ge.io/schemas/supplier-risk/factory-report.v1.schema.json",
+  "title": "Supplier Risk — Factory MES Daily Report (입력, 일 1회)",
+  "description": "[신규 정의] 공장 MES/FactoryOS API 가 하루 한 번 보내는 오더별 집계. 09-08 CTO 확인 — 사람이 채우는 주간 보고가 아니다. **MES 가 있는 공장(유형 a)에서만 온다.** 없는 공장은 결측이 아니라 경로가 없는 것이고, 그 오더에는 이 계약의 행이 하나도 없다. is_missing=true 는 API 연결이 끊긴 날이다 — 사람의 누락이 아니다. 폐기·재작업 판정은 여전히 사람이 하므로 scrap/rework 에는 편향이 남는다. 수량 규칙: FactoryOS 의 good_quantity 는 produced − scrap − rework 로 유도한다. datasets/generated/factory_reports.jsonl 의 한 줄.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tenant_id",
+    "order_id",
+    "factory_id",
+    "seq",
+    "due_at",
+    "is_missing",
+    "source"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "supplier_risk.factory_report.v1"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^ten_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "order_id": {
+      "type": "string",
+      "pattern": "^ord_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "factory_id": {
+      "type": "string",
+      "pattern": "^fac_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "오더 안에서의 회차. 일 1회이므로 발주 후 경과일과 같다."
+    },
+    "due_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "이 회차가 도착해야 했던 시각."
+    },
+    "reported_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "실제 도착 시각. 결측이면 null. **지나가면 복원 불가능한 값** — 반드시 수신 측이 찍는다."
+    },
+    "is_missing": {
+      "type": "boolean",
+      "description": "true 면 API 가 끊긴 날. 아래 수량 필드는 없다. 결측 자체가 L0′ 신호다."
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "mes_api",
+        "factoryos",
+        "manual"
+      ],
+      "description": "manual 은 유형 c 공장이 예외적으로 손으로 낸 것 — 편향 파라미터가 다르므로 구분한다."
+    },
+    "produced_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "누적 생산(양품+폐기+재작업). 설비 카운터(cell-daily.v1 produced_by_counter)와 교차검증 ⓪."
+    },
+    "scrap_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "누적 폐기. 재고와 맞아야 하므로 감추기 어렵다."
+    },
+    "rework_quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "누적 재작업. **폐기와 반드시 분리한다** — 재작업이 가장 감추기 쉽고, scrap 만 받으면 문제의 3% 만 본다(Hidden Factory)."
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "setup",
+        "machining",
+        "finishing",
+        "inspection",
+        "packing"
+      ]
+    },
+    "promised_date_reported": {
+      "type": "string",
+      "format": "date-time",
+      "description": "이 회차에 공장이 말한 납기. 값보다 **변동 이력**이 신호다."
+    },
+    "issue_flag": {
+      "type": "boolean",
+      "description": "특이사항 있음/없음. \"없음\" 인데 보고가 늦는 조합이 신호다."
+    },
+    "inspected_quantity": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inspection_type": {
+      "type": "string",
+      "enum": [
+        "full",
+        "sampling"
+      ]
+    },
+    "reject_quantity": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "defect_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "dimension",
+        "surface",
+        "function",
+        "material",
+        "other",
+        null
+      ],
+      "description": "불량 유형 코드. 우리가 정해 내려보낸다(CTO 질문 14)."
+    },
+    "material_lot_id": {
+      "type": "string",
+      "pattern": "^mtl_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "material_supplier": {
+      "type": "string",
+      "pattern": "^sup_[a-z0-9][a-z0-9_-]{0,63}$"
+    },
+    "material_consumed_quantity": {
+      "type": "number",
+      "minimum": 0,
+      "description": "누적 자재 소진. 물리량이라 실제를 따라간다 — 수량 부풀리기의 대조군(qty_inflation)."
+    },
+    "machine_id": {
+      "type": "string",
+      "pattern": "^mch_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "shift": {
+      "type": "string",
+      "enum": [
+        "day",
+        "swing",
+        "night"
+      ]
+    },
+    "operator_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "overtime_hours": {
+      "type": "number",
+      "minimum": 0,
+      "description": "잔업. 불량은 적다는데 잔업이 많으면 defect_hiding."
+    },
+    "photo_taken_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "현장 사진 EXIF 시각. reported_at 과 멀면 stale_evidence."
+    }
+  },
+  "if": {
+    "properties": {
+      "is_missing": {
+        "const": true
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "reported_at": {
+        "type": "null"
+      }
+    },
+    "not": {
+      "anyOf": [
+        {
+          "required": [
+            "produced_quantity"
+          ]
+        },
+        {
+          "required": [
+            "scrap_quantity"
+          ]
+        },
+        {
+          "required": [
+            "rework_quantity"
+          ]
+        }
+      ]
+    }
+  },
+  "else": {
+    "required": [
+      "reported_at",
+      "produced_quantity",
+      "scrap_quantity",
+      "rework_quantity",
+      "stage",
+      "promised_date_reported",
+      "issue_flag"
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.f4ge.io/schemas/supplier-risk/cell-daily.v1.schema.json",
+  "title": "Supplier Risk — Cell Telemetry Daily Aggregate (입력, 일 1회)",
+  "description": "[신규 정의] CellOS 가 설치된 공장(유형 a·b)의 오더별 설비 신호 일 집계. **조작 불가 채널**이다 — 사람이 채우지 않는다. 이 계약의 값은 예측을 직접 올리지 않는다(유형별 실측: Cell 단독 증분 ±0.02). 값은 **교차검증**에 있다 — produced_by_counter 는 factory-report.v1 의 produced_quantity 와 물리적으로 어긋날 수 없다(교차검증 쌍 ⓪). datasets/generated/cell_daily.jsonl 의 한 줄.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tenant_id",
+    "order_id",
+    "factory_id",
+    "day_index",
+    "uptime_ratio",
+    "produced_by_counter"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "supplier_risk.cell_daily.v1"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^ten_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "order_id": {
+      "type": "string",
+      "pattern": "^ord_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "factory_id": {
+      "type": "string",
+      "pattern": "^fac_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "cell_id": {
+      "type": "string",
+      "pattern": "^cell_[a-z0-9][a-z0-9_-]{1,63}$"
+    },
+    "day_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "발주 후 경과일. factory-report.v1 의 seq − 1 과 같은 날이다."
+    },
+    "uptime_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "cycle_time_median": {
+      "type": "number",
+      "minimum": 0,
+      "description": "대표 사이클타임 / 공칭 사이클타임. 1.0 = 계획대로."
+    },
+    "anomaly_event_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "이상탐지 엔진(cell-anomaly-signal.v1)이 낸 이벤트 수."
+    },
+    "tool_change_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "produced_by_counter": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "설비 카운터가 센 누적 생산. 보고 수량과의 차이가 counter_gap."
+    }
+  }
+}

@@ -23,6 +23,14 @@ def table(cfg):
 
 
 @pytest.fixture(scope="session")
+def dataset(cfg):
+    """생성 레코드 전체(파일 8개 그대로) — 계약 검증이 쓴다."""
+    from f4ge_supplier_risk.generator.pipeline import build_dataset
+
+    return build_dataset(cfg)
+
+
+@pytest.fixture(scope="session")
 def truth_map(cfg):
     """오더별 진실 잠재값 — 사유 분해 검증에 쓴다."""
     from f4ge_supplier_risk.generator.pipeline import build_dataset
