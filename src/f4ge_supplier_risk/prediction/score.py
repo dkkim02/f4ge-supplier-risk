@@ -70,13 +70,27 @@ def build_scores(
     그 오더의 결과는 아직 없다.
     """
     risk_cuts = np.quantile(train_pred, _RISK_Q)
-    disc_call = float(np.quantile(train_disc, _DISC_CALL_Q))
-    disc_visit = float(np.quantile(train_disc, _DISC_VISIT_Q))
     risk_tighten = float(np.quantile(train_pred, _RISK_TIGHTEN_Q))
 
-    by_factory = pd.Series(train_disc, index=train["factory_id"].to_numpy()).groupby(level=0).mean()
-    trust_cut = float(by_factory.quantile(_TRUST_GATE_Q))
-    low_trust = set(by_factory[by_factory >= trust_cut].index)
+    # 불일치는 **증거가 있는 오더에서만 정의된다.** MES 가 없는 공장(유형 b·c)의 오더는
+    # 불일치가 0 으로 들어오는데, 그 0 을 분위수와 신뢰도 게이트에 섞으면 —
+    # 그런 오더가 75% 라 컷 자체가 0 이 되고, 증거 없는 공장 전부가 "못 믿을 공장" 이 된다
+    # (09-08 실측: 270건 중 219건 현장 방문). 모르는 것과 못 믿는 것은 다르다.
+    ev_tr = train["l1_rep_produced"].to_numpy(float) > 0
+    ev_te = test["l1_rep_produced"].to_numpy(float) > 0
+    if ev_tr.any():
+        disc_call = float(np.quantile(train_disc[ev_tr], _DISC_CALL_Q))
+        disc_visit = float(np.quantile(train_disc[ev_tr], _DISC_VISIT_Q))
+        by_factory = (
+            pd.Series(train_disc[ev_tr], index=train["factory_id"].to_numpy()[ev_tr])
+            .groupby(level=0)
+            .mean()
+        )
+        trust_cut = float(by_factory.quantile(_TRUST_GATE_Q))
+        low_trust = set(by_factory[by_factory >= trust_cut].index)
+    else:
+        disc_call = disc_visit = float("inf")
+        low_trust = set()
 
     # None 을 numpy 배열에 담으면 NaN 으로 바뀌고, NaN 은 truthy 라서
     # `x or None` 을 통과해 **JSON 에 NaN 이 그대로 나간다.** object dtype 로 둔다.
@@ -87,12 +101,14 @@ def build_scores(
     )
 
     action, reason, check, trust_flag = [], [], [], []
-    for p, d, fid, pc in zip(pred, disc, test["factory_id"].to_numpy(), prim, strict=True):
+    for p, d, fid, pc, ev in zip(
+        pred, disc, test["factory_id"].to_numpy(), prim, ev_te, strict=True
+    ):
         untrusted = fid in low_trust
         trust_flag.append(untrusted)
         # 사유가 있으면 그것을 말한다. **"어긋났다" 보다 "무엇이 어긋났다" 가 행동을 만든다.**
         txt, chk = _REASON_TEXT.get(pc, (None, None))
-        if untrusted and d >= disc_visit:
+        if ev and untrusted and d >= disc_visit:
             action.append("site_visit")
             reason.append(txt or "보고 신뢰도가 낮은 공장이고, 이 오더도 증거와 어긋난다")
             check.append(chk or "현장 공정 · 검사 기록 전반")
@@ -100,7 +116,7 @@ def build_scores(
             action.append("tighten_inspection")
             reason.append("예측 위험이 상위 10%")
             check.append("입고검사 강화 · 제3자 DUPRO 발주")
-        elif d >= disc_call:
+        elif ev and d >= disc_call:
             action.append("call")
             reason.append(txt or "증거가 가리키는 것보다 보고가 좋다")
             check.append(chk or "보고 내용 재확인")
@@ -120,7 +136,7 @@ def build_scores(
             "reported_defect_rate": test["l1_reported_defect_rate"].to_numpy(),
             "reported_missing": test["l1_rep_produced"].to_numpy() <= 0,
             "discrepancy": np.round(disc, 4),
-            "discrepancy_flag": disc >= disc_call,
+            "discrepancy_flag": (disc >= disc_call) & ev_te,
             "factory_trust_low": trust_flag,
             "recommended_action": action,
             "action_reason": reason,

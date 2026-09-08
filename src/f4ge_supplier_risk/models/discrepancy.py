@@ -208,7 +208,11 @@ def factory_trust(
     """공장별 보고 신뢰도 — 불일치가 반복되는가, 한 번뿐인가.
 
     한 오더의 불일치는 사고일 수 있다. 같은 공장에서 계속 나오면 습관이다.
+    보고가 없는 오더는 신뢰도를 말해 주지 않으므로 뺀다 — MES 가 없는 공장은 표에 안 나온다.
+    "모른다" 를 "믿을 만하다" 나 "못 믿는다" 로 바꿔 읽으면 안 된다.
     """
+    if "reported_missing" in scored:
+        scored = scored[~scored["reported_missing"].astype(bool)]
     g = scored.groupby("factory_id")
     out = pd.DataFrame(
         {
