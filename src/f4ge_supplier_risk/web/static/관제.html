@@ -159,7 +159,7 @@ td .mono { font-family: var(--mono); font-size: 11.5px; }
 .chip.gap { background: var(--anomaly-band); box-shadow: inset 0 0 0 1px var(--anomaly-edge);
   color: var(--text); font-weight: 600; }
 .chip.outline { box-shadow: inset 0 0 0 1px var(--border); color: var(--text-2); }
-/* 설치 유형 — 무채색 채널. "보고 경로 없음"은 점선: 값이 나쁜 게 아니라 값이 없는 것이다. */
+/* 연동 유형 — 무채색 채널. "미연동"은 점선: 값이 나쁜 게 아니라 값이 없는 것이다. CellOS·FactoryOS 는 12곳 전부. */
 .chip.type { color: var(--text-2); box-shadow: inset 0 0 0 1px var(--border); font-weight: 500; }
 .chip.type.none { box-shadow: none; border: 1px dashed var(--muted); color: var(--label); height: 20px; }
 .nopath { color: var(--label); font-size: 11.5px; }
@@ -230,7 +230,7 @@ tbody tr.rowlink { cursor: pointer; }
   </div>
   <select id="facSel" class="hidden" aria-label="공장 선택"></select>
   <div class="spacer"></div>
-  <span class="pill" id="coverage" title="계층이 곧 설치 단계다 — MES 가 있어야 생산·불량 정보가 온다"></span>
+  <span class="pill" id="coverage" title="CellOS·FactoryOS 는 협력 조건이라 12곳 전부 설치. 자체 MES 를 연동한 공장만 생산·불량 정보가 온다"></span>
   <span class="pill"><i class="dot"></i><span id="stamp"></span></span>
 </header>
 
@@ -425,23 +425,22 @@ const gapChip = r => !r.hasMes ? noPath("—")
   : `<span class="mono" style="color:var(--label)">${r.disc.toFixed(2)}</span>`;
 const reasonCell = r => {
   // 보고 경로가 없는 오더에 "증거를 받지 못했다"고 쓰면 공장이 안 보낸 것처럼 읽힌다. 경로가 없는 것이다.
-  if(!r.hasMes) return noPath("보고 경로 없음");
+  if(!r.hasMes) return noPath("생산·불량 미연동");
   if(!r.reason) return `<span style="color:var(--placeholder)">—</span>`;
   const t=D.reasonText[r.reason]||{t:r.reason,c:""};
   const extra=r.reasons.length>1?` <span class="sub">+${r.reasons.length-1}</span>`:"";
   return `<span title="확인할 것: ${t.c}">${t.t}${extra}</span>`;
 };
 const bar = p => `<span class="bar"><i class="${p>1?"over":""}" style="width:${Math.min(p,1)*100}%"></i></span>`;
-// 미보고(API 끊김)와 경로 없음(MES 미설치)은 다르다. 둘 다 0% 가 아니다.
+// 미보고(API 끊김)와 미연동(자체 MES 미연동)은 다르다. 둘 다 0% 가 아니다.
 const rep = r => !r.hasMes ? noPath()
   : r.rep===null ? `<span style="color:var(--placeholder)">미보고</span>`
   : `<span class="mono">${(r.rep*100).toFixed(2)}%</span>`;
 const ppm = v => `<b class="mono" style="font-size:13px">${fmt(v)}</b> <span class="sub">PPM</span>`;
 const facName = id => id.replace("fac_kr_","공장 ");
-// 설치 유형 칩 — 무채색. a/b/c 가 아니라 "무엇이 오는가" 로 쓴다.
-const typeChip = f => f.hasMes ? `<span class="chip type">MES + Cell</span>`
-  : f.hasCell ? `<span class="chip type">Cell 만</span>` : `<span class="chip type none">보고 경로 없음</span>`;
-const noPath = (t="경로 없음") => `<span class="nopath" title="MES 가 없어 생산·불량 정보가 오지 않는다. 결측이 아니라 경로가 없는 것이다">${t}</span>`;
+// 연동 유형 칩 — 무채색. "무엇이 오는가" 로 쓴다. CellOS·FactoryOS 는 협력 조건이라 12곳 전부 있다.
+const typeChip = f => f.hasMes ? `<span class="chip type">MES 연동</span>` : `<span class="chip type none">생산·불량 미연동</span>`;
+const noPath = (t="미연동") => `<span class="nopath" title="자체 MES 가 FactoryOS 에 연동되지 않아 생산·불량 정보가 오지 않는다. 결측이 아니라 미연동이다">${t}</span>`;
 const dash = () => `<span style="color:var(--placeholder)">—</span>`;
 
 function tbl(id, cols, rows, empty){
@@ -462,7 +461,7 @@ const hideTip = ()=>tip.style.opacity=0;
 document.getElementById("stamp").textContent =
   `${D.today} · 오더 ${fmt(D.metrics.orders)}건 · 진행 중 ${inflight.length}건`;
 document.getElementById("coverage").innerHTML =
-  `설치 <b>MES ${D.coverage.a}</b> · Cell 만 ${D.coverage.b} · <span class="nopath">없음 ${D.coverage.c}</span>`;
+  `<b>MES 연동 ${D.coverage.a}</b> · <span class="nopath">미연동 ${D.coverage.b + D.coverage.c}</span> · CellOS·FactoryOS ${D.coverage.total}/${D.coverage.total}`;
 
 /* ══════════ 관리자 ══════════ */
 (() => {
@@ -481,7 +480,7 @@ document.getElementById("coverage").innerHTML =
   const rank = a => ["site_visit","tighten_inspection","call","none"].indexOf(a);
   tbl("tInflight",[
     {h:"오더", f:r=>`<b>${r.id.replace("ord_","")}</b> <span class="sub">${r.prd}</span>`},
-    {h:"공장", f:r=>`${facName(r.fac)}${r.trustLow?` <span class="chip gap">신뢰 낮음</span>`:""}${r.hasMes?"":` <span class="chip type none">보고 경로 없음</span>`}`},
+    {h:"공장", f:r=>`${facName(r.fac)}${r.trustLow?` <span class="chip gap">신뢰 낮음</span>`:""}${r.hasMes?"":` <span class="chip type none">미연동</span>`}`},
     {h:"권고", f:r=>actChip(r.act)},
     {h:"어긋난 것", f:reasonCell},
     {h:"확인할 것", cls:"opt", f:r=>!r.hasMes ? `<span class="sub">MES 연동 — 생산·불량 정보가 오면 대조가 시작된다</span>`
@@ -513,7 +512,7 @@ document.getElementById("coverage").innerHTML =
   const ylo=Math.min(...ys)-0.28, yhi=Math.max(...ys)+0.28;
   const X=v=>ml+((v-xlo)/(xhi-xlo))*pw, Y=v=>mt+ph-((v-ylo)/(yhi-ylo))*ph;
   const midX=X((xlo+xhi)/2), midY=Y(FM.reduce((a,f)=>a+f.disc,0)/Math.max(FM.length,1));
-  const yRug=mt+ph+62; // 보고 경로 없는 공장의 띠 — 세로축 밖
+  const yRug=mt+ph+62; // 미연동 공장의 띠 — 세로축 밖
 
   s.appendChild(E("rect",{x:ml,y:mt,width:pw,height:ph,rx:6},{fill:"var(--track)"}));
   [[midX,mt,midX,mt+ph],[ml,midY,ml+pw,midY]].forEach(([a,b,cc,d])=>
@@ -535,7 +534,7 @@ document.getElementById("coverage").innerHTML =
     T(x,mt+ph+19,fmt(v),{a:"middle",s:10.5,mono:1});});
   T(ml+pw,mt+ph+40,"예상 불량 (PPM · 로그) →",{a:"end",s:11,c:"var(--text-2)"});
   s.appendChild(E("line",{x1:ml,y1:yRug,x2:ml+pw,y2:yRug},{stroke:"var(--border)",strokeDasharray:"2 4"}));
-  T(ml-12,yRug+4,"보고 경로 없음",{a:"end",s:10.5,c:"var(--text-2)"});
+  T(ml-12,yRug+4,"생산·불량 미연동",{a:"end",s:10.5,c:"var(--text-2)"});
   T(ml-12,yRug+17,"세로축 없음 · 가로만",{a:"end",s:9.5});
   T(ml-12,mt+12,"보고를 못 믿음",{a:"end",s:10.5,c:"var(--text-2)"});
   T(ml-12,mt+ph-2,"보고가 일관됨",{a:"end",s:10.5,c:"var(--text-2)"});
@@ -560,9 +559,9 @@ document.getElementById("coverage").innerHTML =
     s.appendChild(hit);});
 
   document.getElementById("legMatrix").innerHTML =
-    `<span><i style="background:var(--fill)"></i>MES 보고 있는 공장 ${FM.length}곳</span>`+
+    `<span><i style="background:var(--fill)"></i>MES 연동 공장 ${FM.length}곳</span>`+
     `<span><i style="background:var(--anomaly-edge)"></i>보고 신뢰도 하위 — 점선 테두리</span>`+
-    `<span><i style="background:var(--card);border:1.5px dashed var(--muted)"></i>보고 경로 없음 ${FN.length}곳 — 아래 띠, 신뢰 축에 놓을 수 없다</span>`;
+    `<span><i style="background:var(--card);border:1.5px dashed var(--muted)"></i>미연동 ${FN.length}곳 — 아래 띠, 신뢰 축에 놓을 수 없다</span>`;
 
   const EF=D.effect, pc=v=>v==null?dash():`<span class="mono">${(v*100).toFixed(1)}%</span>`;
   document.getElementById("effectSub").textContent =
@@ -583,14 +582,14 @@ document.getElementById("coverage").innerHTML =
   ],"");
   document.getElementById("effectNote").innerHTML =
     `<b>검사 강화</b>는 실제로 나쁜 오더를 기저의 ${(EF.rows[1][2]/EF.base.risky).toFixed(1)}배로 잡는다 — 생성기가 바뀌어도 유지되는 축이다.
-     <b>현장 방문</b>은 지금 보고 있는 공장이 ${EF.reporting}곳뿐이라 기저 +${((EF.rows[0][3]-EF.base.biased_reporting)*100).toFixed(0)}pt 에 그친다.
-     12곳 전부 보고하면 ${(EF.note_all12.visit_prec*100).toFixed(0)}% 까지 오른다 —
-     <b>MES 설치 공장이 늘어야 성립하는 상품</b>이고, 이 표의 빈칸이 곧 설치 영업의 자리다.`;
+     <b>현장 방문</b>은 지금 MES 를 연동한 공장이 ${EF.reporting}곳뿐이라 기저 +${((EF.rows[0][3]-EF.base.biased_reporting)*100).toFixed(0)}pt 에 그친다.
+     12곳 전부 연동하면 ${(EF.note_all12.visit_prec*100).toFixed(0)}% 까지 오른다 —
+     <b>MES 연동이 늘어야 성립하는 상품</b>이다. CellOS·FactoryOS 는 이미 12곳 전부 있다.`;
 
   const facOrder = [...F].sort((a,b)=>(b.hasMes-a.hasMes)||((b.disc??-9)-(a.disc??-9))||(b.ppmMed-a.ppmMed));
   tbl("tFactory",[
     {h:"공장", f:f=>`<b>${facName(f.id)}</b> <span class="sub">${f.prd}</span>`},
-    {h:"설치", f:typeChip},
+    {h:"연동", f:typeChip},
     {h:"오더", n:1, f:f=>f.orders},
     {h:"예상 불량 중앙", n:1, f:f=>ppm(f.ppmMed)},
     {h:"불일치", n:1, f:f=>f.disc==null ? noPath("—") : f.trustLow
@@ -655,7 +654,7 @@ function renderSite(fid){
       : `<span class="mono">${(r.slack*100).toFixed(0)}%</span>`},
     {h:"예상 불량", n:1, f:r=>ppm(r.ppm)},
     {h:"위험", f:r=>riskChip(r.risk)},
-    {h:"우리 보고", n:1, f:r=>!f.hasMes ? noPath("MES 없음")
+    {h:"우리 보고", n:1, f:r=>!f.hasMes ? noPath("미연동")
       : r.rep===null ? `<span style="color:var(--placeholder)">미제출</span>` : `<span class="mono">${(r.rep*100).toFixed(2)}%</span>`},
     {h:"초도품 검사", f:r=>r.faiSub
       ? `<span class="chip outline">제출</span>` : `<span class="chip gap">미제출</span>`},
@@ -674,9 +673,8 @@ function renderSite(fid){
      blanks>mine.length,
      "검사 수량과 불합격 수를 함께 적어 주시면 추정이 정확해집니다"],
   ] : [
-    ["MES 연동", "없음", true,
-     f.hasCell ? "설비 신호는 오지만 생산·불량 정보가 오지 않습니다. 그래서 평가가 과거 실적과 초도품 검사만으로 내려갑니다. 연동된 공장에서는 평가의 순위 정확도가 0.47 → 0.85 로 올랐습니다"
-               : "생산·불량 정보가 오지 않아 평가가 과거 실적과 초도품 검사만으로 내려갑니다. 연동된 공장에서는 평가의 순위 정확도가 0.47 → 0.85 로 올랐습니다"],
+    ["자체 MES → FactoryOS 연동", "없음", true,
+     "CellOS 설비 신호는 오지만 생산·불량 정보가 FactoryOS 로 올라오지 않습니다. 그래서 평가가 과거 실적과 초도품 검사만으로 내려갑니다. 연동된 공장에서는 평가의 순위 정확도가 0.48 → 0.85 로 올랐습니다"],
     ["초도품 검사(FAI) 제출", `${(f.faiRate*100).toFixed(0)}%`, f.faiRate<0.7,
      "첫 물건 전 치수 실측치입니다. 지금 이 공장에서 오더 초반에 볼 수 있는 유일한 자료입니다"],
   ];
@@ -745,7 +743,7 @@ function openFac(fid){
       : [`${f.disc>0?"+":""}${f.disc.toFixed(2)}`, "불일치 평균", f.trustLow?"하위 25% — 보고를 믿기 어렵다":"전체 평균 수준"],
     [`${(f.faiRate*100).toFixed(0)}%`, "초도품 검사 제출", f.hasMes?"오더 초반 유일한 상세 신호":"이 공장에서 오는 유일한 현장 자료"],
     f.hasMes ? [`${f.delayMed ?? "—"}일`, "집계 지연 중앙", `누락 ${f.missSum}회`]
-             : ["—", "MES 집계", "보고 경로 없음"],
+             : ["—", "MES 집계", "생산·불량 미연동"],
     [`${inM.length}`, "진행 중", `전체 ${f.orders}건`],
   ].map(([v,t,d])=>`<div class="kpi"><div class="v">${v}</div><div class="t">${t}</div><div class="d">${d}</div></div>`).join("");
 
@@ -753,7 +751,7 @@ function openFac(fid){
   const kMax = Math.max(...F.map(x=>x.kappa))*1.1;
   document.getElementById("facModelSub").textContent = f.hasMes
     ? "2단 모델 — MES 보고가 순위를, 우리 라벨이 눈금을 잡는다"
-    : "보고가 없는 공장 — 우리 라벨이 공장 수준을, 거래 이력이 오더 간 차이를 잡는다";
+    : "MES 미연동 공장 — 우리 라벨이 공장 수준을, 거래 이력이 오더 간 차이를 잡는다";
   document.getElementById("facModel").innerHTML = f.hasMes ? `
     <div class="formula">
       <div class="fbox"><div class="fl">① 공장이 보고한 내부 불량률 (중앙)</div>
@@ -785,7 +783,7 @@ function openFac(fid){
     </div>`;
   const rel = f.kappa/D.kappaPooled;
   document.getElementById("facModelNote").innerHTML = !f.hasMes
-    ? `이 공장에는 <b>MES 보고 경로가 없다.</b> 생산·불량 정보가 오지 않으므로 ① 공장 수준은 우리 입고검사 ${f.kappaObs}건으로만 잡고,
+    ? `이 공장은 <b>자체 MES 가 FactoryOS 에 연동되지 않았다.</b> CellOS 신호는 오지만 생산·불량 정보가 오지 않으므로 ① 공장 수준은 우리 입고검사 ${f.kappaObs}건으로만 잡고,
        ② 오더 간 차이는 거래 이력에서 온다. 그래서 <b>불일치(보고 vs 증거)는 정의되지 않고</b> 현장 방문·전화 권고가 나올 수 없다 —
        검사 강화만 걸린다. MES 를 연동한 공장에서는 순위 정확도가 <b>0.47 → 0.85</b> 로 올랐다(유형별 실측, 8 seed).`
     : `<b>κ = (1 − 검사 검출률) ÷ 보고 편향</b> 이다. 두 값을 따로 알 필요가 없고 비만 알면 된다.
@@ -856,7 +854,7 @@ function openFac(fid){
   (()=>{
     const mix=f.reasonMix||{}, keys=Object.keys(D.reasonText).filter(k=>mix[k]);
     const host=document.getElementById("facReasons");
-    if(!f.hasMes){ host.innerHTML=`<div class="empty-row">대조할 보고가 없다 — 보고 경로 없음(MES 미설치)</div>`; return; }
+    if(!f.hasMes){ host.innerHTML=`<div class="empty-row">대조할 보고가 없다 — 생산·불량 미연동</div>`; return; }
     if(!keys.length){ host.innerHTML=`<div class="empty-row">어긋난 짝이 없다</div>`; return; }
     const mx=Math.max(...keys.map(k=>mix[k]));
     host.innerHTML=keys.sort((a,b)=>mix[b]-mix[a]).map(k=>{

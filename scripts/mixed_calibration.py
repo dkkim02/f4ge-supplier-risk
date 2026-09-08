@@ -72,7 +72,7 @@ def candidates(tr, te, is_a_tr, is_a_te) -> dict[str, np.ndarray]:
 def main() -> None:
     cfg = config.load("configs/generator.yaml")
     names = ["2단 전체", "혼합 raw", "혼합 B 비율", "혼합 C 분해", "혼합 D 적층"]
-    types = ("a", "b", "c", "전체")
+    types = ("a", "b", "전체")
     res = {(nm, t): [] for nm in names for t in types}
 
     for seed in SEEDS:

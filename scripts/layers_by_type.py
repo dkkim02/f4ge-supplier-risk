@@ -3,9 +3,9 @@
 전체 평균은 MES 오더가 25% 뿐이라 L0 로 내려간 75% 에 묻힌다(프로젝트_정리.md §5-1).
 모델은 전체 학습 구간으로 한 번 적합하고, 평가는 테스트 구간을 유형별로 갈라서 한다.
 
-  a  MES + Cell   → L0 / +Cell / +MES 셋 다 실제 신호가 있다
-  b  Cell 만      → +MES 는 결측(중앙값 대치). +Cell 까지만 의미 있다
-  c  없음         → 전부 L0 와 같다. 대조군
+  a  자체 MES 연동  → L0 / +Cell / +MES 셋 다 실제 신호가 있다 (3곳)
+  b  설비 신호만    → +MES 는 결측(중앙값 대치). +Cell 까지만 의미 있다 (9곳)
+  (CellOS·FactoryOS 는 협력 조건이라 12곳 전부 설치 — "없음" 유형은 없다. 09-08 저녁 확정)
 
 seed 8개. 2단 모델의 seed 편차가 ±0.2 라 3 seed 로는 인접 수준을 구분하지 못했다.
 """
@@ -34,7 +34,8 @@ RUNS = (
     ("1단 L0+Cell+MES", baseline, "L0+Cell+MES"),
     ("2단 L0+Cell+MES", two_stage, "L0+Cell+MES"),
 )
-TYPES = ("a", "b", "c", "전체")
+# 09-08 저녁: 유형은 둘이다 — a MES 연동(생산·불량 + 설비) / b 설비 신호만. CellOS·FactoryOS 는 12곳 전부.
+TYPES = ("a", "b", "전체")
 MIXED = "혼합 a:2단 · b,c:1단 L0"
 
 
@@ -62,7 +63,7 @@ def main() -> None:
                 m = np.ones(len(te), dtype=bool) if t == "전체" else te_type == t
                 res[(label, t)].append(float(spearmanr(pred[m], truth[m]).statistic))
         # 혼합 — MES 가 있는 오더만 2단, 나머지는 1단 L0. 두 모델 모두 유닛당 escape 확률이라 눈금이 같다.
-        mixed = np.where(te_type == "a", preds["2단 L0+Cell+MES"], preds["1단 L0"])
+        mixed = np.where(te_type == "a", preds["2단 L0+Cell+MES"], preds["1단 L0"])  # b: L0 (Cell 단독 증분 0)
         for t in TYPES:
             m = np.ones(len(te), dtype=bool) if t == "전체" else te_type == t
             res[(MIXED, t)].append(float(spearmanr(mixed[m], truth[m]).statistic))

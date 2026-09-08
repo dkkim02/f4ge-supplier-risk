@@ -31,19 +31,20 @@ from f4ge_supplier_risk.prediction.score import build_scores
 
 PRD = {"prd_bracket": "브래킷", "prd_shaft": "샤프트", "prd_housing": "하우징", "prd_flange": "플랜지"}
 MKT = {"eu": "유럽", "us_west": "미 서안", "us_east": "미 동안"}
-TYPE = {"a": {"label": "MES + Cell", "hasMes": True, "hasCell": True},
-        "b": {"label": "Cell 만", "hasMes": False, "hasCell": True},
-        "c": {"label": "보고 경로 없음", "hasMes": False, "hasCell": False}}
+# CellOS·FactoryOS 는 협력 조건이라 12곳 전부 있다. 차이는 자체 MES 가 FactoryOS 에 연동돼 생산·불량 데이터가 오는가.
+TYPE = {"a": {"label": "MES 연동", "hasMes": True, "hasCell": True},
+        "b": {"label": "생산·불량 미연동", "hasMes": False, "hasCell": True},
+        "c": {"label": "생산·불량 미연동", "hasMes": False, "hasCell": True}}
 # 권고 정밀도 — scripts/coverage_sweep.py a=3 행 (8 seed). "편향 심한 공장" = 보고 공장 내 실효 편향 중앙값 아래.
 EFFECT = {
     "seeds": 8, "reporting": 3,
     "rows": [
-        ["site_visit", 6.8, 0.0, 0.375], ["tighten_inspection", 23.1, 0.774, 0.397],
-        ["call", 8.9, 0.062, 0.237], ["none", 231.2, 0.155, None],
+        ["site_visit", 6.8, 0.0, 0.375], ["tighten_inspection", 22.9, 0.772, 0.406],
+        ["call", 8.9, 0.062, 0.237], ["none", 231.5, 0.155, None],
     ],
     "base": {"risky": 0.20, "biased_reporting": 0.315},
     # 12곳 전부 보고 + MES 하한 OFF 이면 방문 정밀도 94.9% — 불일치탐지.md §4-1
-    "note_all12": {"visit_prec": 0.949, "visit_prec_floor": 0.618, "rank_all": 0.868, "rank_3": 0.661},
+    "note_all12": {"visit_prec": 0.949, "visit_prec_floor": 0.618, "rank_all": 0.868, "rank_3": 0.664},
 }
 
 

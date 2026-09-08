@@ -9,10 +9,13 @@ seed: 20260907
 #   type_a  MES 보유 + CellOS/FactoryOS 설치  -> 생산·불량 + 설비 신호 전부
 #   type_b  설치만 (MES 없음)                 -> 설비 신호 + FactoryOS 가 입력 경로
 #   type_c  아무것도 없음                     -> L0 만
+# 09-08 저녁 확정 — CellOS·FactoryOS 는 협력 조건이라 12곳 전부 설치돼 있다. 설비 신호(L2)는 항상 온다.
+# 차이는 생산·불량 데이터가 흐르는가: 자체 MES 를 FactoryOS 에 연동한 공장(a)만 온다. 나머지(b)는 설비 신호만.
+# "없음"(c)은 존재하지 않는다 — 0 으로 두되 키는 남긴다(sweep 스크립트가 쓴다).
 factory_types:
   a: 3
-  b: 4
-  c: 5
+  b: 9
+  c: 0
 
 scale:
   factories: 12            # 제품군 4종 x 3곳 (= a+b+c)

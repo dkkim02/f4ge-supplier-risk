@@ -93,17 +93,17 @@ targets:
 
   # 계측 수준이 공장마다 다르다. 이 비율이 곧 설치 진행 상황이다.
   cell_coverage:
-    target: 0.583
-    tol: 0.05
-    source: factory_types
-    note: "유형 a(3) + b(4) = 7/12. CellOS 설치 공장 비율."
+    target: 1.0
+    tol: 0.0
+    source: partnership_terms
+    note: "12/12. CellOS·FactoryOS 는 협력 조건 — 전부 설치돼 있다(09-08 저녁 확정). 설비 신호는 항상 온다."
 
   mes_coverage:
     target: 0.25
     tol: 0.05
     source: factory_types
     note: >
-      유형 a(3)/12. 생산·불량 정보가 오는 공장 비율.
+      유형 a(3)/12. 자체 MES 를 FactoryOS 에 연동해 생산·불량 정보가 오는 공장 비율. 나머지 9곳은 설비 신호만.
       ⚠ 전체 평균 성능이 이 비율에 희석된다 — 설치 가치는 **유형별로** 재야 보인다.
 
 # ── ⚠ 실측 근거 없음. 민감도 분석 대상 ────────────────────

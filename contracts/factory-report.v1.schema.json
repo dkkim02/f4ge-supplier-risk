@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.f4ge.io/schemas/supplier-risk/factory-report.v1.schema.json",
   "title": "Supplier Risk — Factory MES Daily Report (입력, 일 1회)",
-  "description": "[신규 정의] 공장 MES/FactoryOS API 가 하루 한 번 보내는 오더별 집계. 09-08 CTO 확인 — 사람이 채우는 주간 보고가 아니다. **MES 가 있는 공장(유형 a)에서만 온다.** 없는 공장은 결측이 아니라 경로가 없는 것이고, 그 오더에는 이 계약의 행이 하나도 없다. is_missing=true 는 API 연결이 끊긴 날이다 — 사람의 누락이 아니다. 폐기·재작업 판정은 여전히 사람이 하므로 scrap/rework 에는 편향이 남는다. 수량 규칙: FactoryOS 의 good_quantity 는 produced − scrap − rework 로 유도한다. datasets/generated/factory_reports.jsonl 의 한 줄.",
+  "description": "[신규 정의] 공장 MES/FactoryOS API 가 하루 한 번 보내는 오더별 집계. 09-08 CTO 확인 — 사람이 채우는 주간 보고가 아니다. **자체 MES 를 FactoryOS 에 연동한 공장(유형 a)에서만 온다.** CellOS·FactoryOS 는 12곳 전부 있지만 생산·불량 데이터는 연동한 곳만 흐른다 — 미연동 공장은 결측이 아니라 경로가 없는 것이고, 그 오더에는 이 계약의 행이 하나도 없다. is_missing=true 는 API 연결이 끊긴 날이다 — 사람의 누락이 아니다. 폐기·재작업 판정은 여전히 사람이 하므로 scrap/rework 에는 편향이 남는다. 수량 규칙: FactoryOS 의 good_quantity 는 produced − scrap − rework 로 유도한다. datasets/generated/factory_reports.jsonl 의 한 줄.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -60,7 +60,7 @@
         "factoryos",
         "manual"
       ],
-      "description": "manual 은 유형 c 공장이 예외적으로 손으로 낸 것 — 편향 파라미터가 다르므로 구분한다."
+      "description": "mes_api = 자체 MES → FactoryOS 연동(유형 a, 현재 3곳). factoryos = 사람이 FactoryOS 에 직접 입력 — 종이 보고에 가까운 편향이라 하한 논거가 약하다. manual = 그 외. 경로별로 편향 파라미터를 나눈다."
     },
     "produced_quantity": {
       "type": "integer",

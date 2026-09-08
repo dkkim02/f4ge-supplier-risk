@@ -28,8 +28,9 @@ from f4ge_supplier_risk.prediction.run import _predict
 from f4ge_supplier_risk.prediction.score import build_scores
 
 SEEDS = (20260907, 11, 4242, 7, 101, 2026, 31337, 909)
-# a 가 늘면 b·c 가 준다. Cell 은 a 에 포함되므로 cell 설치 수는 a+b.
-LEVELS = {3: (3, 4, 5), 6: (6, 3, 3), 9: (9, 2, 1), 12: (12, 0, 0)}
+# a(MES 연동)가 늘면 b(설비 신호만)가 준다. Cell 은 12곳 전부.
+# 09-08 저녁: CellOS·FactoryOS 는 12곳 전부 — 나머지는 전부 b(설비 신호만). c 는 없다.
+LEVELS = {3: (3, 9, 0), 6: (6, 6, 0), 9: (9, 3, 0), 12: (12, 0, 0)}
 
 
 def run_level(cfg: dict, n_a: int, no_floor: bool = False) -> dict[str, list[float]]:

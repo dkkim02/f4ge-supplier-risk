@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.f4ge.io/schemas/supplier-risk/cell-daily.v1.schema.json",
   "title": "Supplier Risk — Cell Telemetry Daily Aggregate (입력, 일 1회)",
-  "description": "[신규 정의] CellOS 가 설치된 공장(유형 a·b)의 오더별 설비 신호 일 집계. **조작 불가 채널**이다 — 사람이 채우지 않는다. 이 계약의 값은 예측을 직접 올리지 않는다(유형별 실측: Cell 단독 증분 ±0.02). 값은 **교차검증**에 있다 — produced_by_counter 는 factory-report.v1 의 produced_quantity 와 물리적으로 어긋날 수 없다(교차검증 쌍 ⓪). datasets/generated/cell_daily.jsonl 의 한 줄.",
+  "description": "[신규 정의] 오더별 설비 신호 일 집계. CellOS 는 협력 조건이라 12곳 전부에서 온다. **조작 불가 채널**이다 — 사람이 채우지 않는다. 이 계약의 값은 예측을 직접 올리지 않는다(유형별 실측: Cell 단독 증분 ±0.02). 값은 **교차검증**에 있다 — produced_by_counter 는 factory-report.v1 의 produced_quantity 와 물리적으로 어긋날 수 없다(교차검증 쌍 ⓪). datasets/generated/cell_daily.jsonl 의 한 줄.",
   "type": "object",
   "additionalProperties": false,
   "required": [

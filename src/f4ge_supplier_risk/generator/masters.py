@@ -108,8 +108,8 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
                 "bias_sensitivity": float(rng.uniform(0.0, 2.0 * a["bias_sensitivity"])),
                 "report_discipline": float(rng.uniform(disc_lo, disc_hi)),
                 "factory_type": types[idx],
-                "has_mes": types[idx] == "a",  # 생산·불량 정보가 오는가
-                "has_cell": types[idx] in ("a", "b"),  # 설비 신호가 오는가
+                "has_mes": types[idx] == "a",  # 자체 MES 가 FactoryOS 에 연동돼 생산·불량 정보가 오는가
+                "has_cell": types[idx] in ("a", "b"),  # 설비 신호. CellOS 는 협력 조건이라 실제로는 전부 True (c 는 0곳)
                 # MES 입력 단계의 편향. 폐기·재작업 판정은 사람이 하므로 남는다.
                 "mes_input_bias": float(rng.uniform(*a["mes_input_bias_range"])),
             }

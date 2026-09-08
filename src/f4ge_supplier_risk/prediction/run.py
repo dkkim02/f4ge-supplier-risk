@@ -27,11 +27,11 @@ _EPS = 1e-7
 def _predict(train: pd.DataFrame, test: pd.DataFrame) -> np.ndarray:
     """보고가 있는 오더는 2단, 없는 오더는 **2단의 공장 수준 × 1단 L0 의 공장 내 편차.**
 
-    보고 없는 오더에 2단만 쓰면 사전분포 × κ 라 공장 안에서 오더를 구분하지 못하고(유형 c 순위 0.425),
+    보고 없는 오더에 2단만 쓰면 사전분포 × κ 라 공장 안에서 오더를 구분하지 못하고(유형 b 내부 순위 0.499 vs L0 0.534),
     1단 L0 만 쓰면 공장 수준을 놓친다 — L0 는 학습 구간에 고정되지만 2단은 테스트 구간에서
     κ 를 온라인 갱신해 공장 수준을 따라간다. 둘을 곱해 각자 잘하는 것만 남긴다.
-    scripts/mixed_calibration.py (8 seed): 전체 0.600 → 0.661, 7/8 seed 개선, 최악 −0.100.
-    유형 b 0.425 → 0.523 · c 0.425 → 0.545 · a 는 그대로 0.851.
+    scripts/mixed_calibration.py (8 seed, 유형 3/9): 전체 0.608 → 0.664, 7/8 seed 개선, 최악 −0.107.
+    유형 b(미연동) 0.499 → 0.586 · a 는 그대로 0.852. CellOS·FactoryOS 는 12곳 전부 있다 — 차이는 MES 연동.
     """
     p2 = two_stage.fit_predict(train, test, FULL)
     p0 = baseline.fit_predict(train, test, L0)

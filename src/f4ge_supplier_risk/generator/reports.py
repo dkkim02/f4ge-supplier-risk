@@ -68,8 +68,8 @@ def build_reports(
     qty = order["order_qty"]
     interval = cfg["scale"]["mes_interval_days"]
     n_reports = max(2, int(np.ceil(truth["actual_days"] / interval)))
-    # MES/FactoryOS 가 없는 공장은 생산·불량 정보가 아예 오지 않는다.
-    # 결측이 아니라 **경로가 없는 것**이고, 그것이 유형 b·c 의 정의다.
+    # 자체 MES 를 FactoryOS 에 연동하지 않은 공장은 생산·불량 정보가 아예 오지 않는다.
+    # 결측이 아니라 **미연동**이고, 그것이 유형 b 의 정의다. (CellOS·FactoryOS 자체는 12곳 전부 있다.)
     if not factory["has_mes"]:
         return [], _empty_mech()
 
