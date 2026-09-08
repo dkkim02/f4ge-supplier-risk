@@ -10,8 +10,9 @@
 | 파일 | 역할 | 대응 생성 파일 |
 | --- | --- | --- |
 | `supplier-order.v1` | 입력 — 오더 (발주 시점 확정) | `orders.jsonl` |
-| `factory-report.v1` | 입력 — 공장 주간 보고 (T1+T2) | `factory_reports.jsonl` |
+| `factory-report.v1` | 입력 — **공장 MES 일 1회 집계** (T1+T2). 유형 a 만 | `factory_reports.jsonl` |
 | `fai-report.v1` | 입력 — 초도품 검사 | `fai_reports.jsonl` |
+| `cell-daily.v1` | 입력 — **설비 텔레메트리 일 집계**. 유형 a·b (09-08 추가) | `cell_daily.jsonl` |
 | `order-quality-outcome.v1` | 라벨 — 입고검사·클레임 | `quality_outcomes.jsonl` |
 | `supplier-risk-score.v1` | **출력** — 예측 품질 + 보고 품질 + 불일치도 | — |
 
