@@ -2,7 +2,7 @@
 
     python scripts/export_dashboard.py            → datasets/generated/dashboard_data.json + /tmp 발행용 html 경로 출력
 
-화면 템플릿은 src/f4ge_supplier_risk/web/static/관제.html (디자인 시스템은 f4ge-quality-prediction 승계).
+화면 템플릿은 src/f4ge_supplier_risk/web/static/공장관제.html (디자인 시스템은 f4ge-quality-prediction 승계).
 날짜는 합성 데이터의 기준일을 오늘로 옮겨 표시한다 — 절대 날짜는 의미가 없고 순서와 간격만 의미가 있다.
 """
 
@@ -64,13 +64,11 @@ def main() -> None:
     counts = {"a": out["coverage"]["a"], "b": out["coverage"]["b"]}
     (ROOT / "datasets/generated/dashboard_data.json").write_text(json.dumps(out, ensure_ascii=False))
     payload = json.dumps(out, ensure_ascii=False, separators=(",", ":"))
-    dst = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "datasets/generated/관제.html"
-    dst.write_text((ROOT / "src/f4ge_supplier_risk/web/static/관제.html").read_text().replace("__DATA__", payload))
-    dst2 = dst.with_name("공장관제.html")
-    dst2.write_text((ROOT / "src/f4ge_supplier_risk/web/static/공장관제.html").read_text().replace("__DATA__", payload))
+    dst = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "datasets/generated/공장관제.html"
+    dst.write_text((ROOT / "src/f4ge_supplier_risk/web/static/공장관제.html").read_text().replace("__DATA__", payload))
     inflight = sum(not r["late"] for r in out["rows"])
     print(f"rows {len(out['rows'])} · 진행 중 {inflight} · 공장 {counts} · Spearman {out['metrics']['spearman']}")
-    print(f"→ {dst}\n→ {dst2}")
+    print(f"→ {dst}")
 
 
 if __name__ == "__main__":

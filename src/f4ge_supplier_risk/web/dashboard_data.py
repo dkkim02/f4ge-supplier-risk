@@ -57,7 +57,6 @@ def build_dashboard(
     outc = {q["order_id"]: q for q in data["quality_outcomes"]}
     fai = {f["order_id"]: f for f in data["fai_reports"]}
     t0 = min(_dt(o["ordered_at"]) for o in data["orders"]) if data["orders"] else cut
-    trust_low = set(scored.loc[scored["factory_trust_low"].astype(bool), "factory_id"])
 
     rows = []
     for _, s in scored.iterrows():
@@ -77,8 +76,8 @@ def build_dashboard(
             # 제조 품질 — 이 오더의 내부 불량률 추정 (09-08 저녁, 사용자 목표 ①)
             "internal": round(float(s["predicted_internal_rate"]), 5),
             "rep": None if bool(s["reported_missing"]) else round(float(s["reported_defect_rate"]), 4),
-            "hasMes": has_mes, "disc": round(float(s["discrepancy"]), 4), "discFlag": bool(s["discrepancy_flag"]),
-            "trustLow": bool(s["factory_trust_low"]), "act": s["recommended_action"],
+            # 불일치(disc·discFlag·trustLow)는 2026-09-10 화면에서 빠졌다. 계약(supplier-risk-score.v1)에는 남아 있다.
+            "hasMes": has_mes, "act": s["recommended_action"],
             "why": s["action_reason"] or None, "check": s["action_check"] or None,
             "reason": s["reason_primary"] if isinstance(s["reason_primary"], str) else None,
             "reasons": list(s["reason_codes"]),
@@ -101,7 +100,6 @@ def build_dashboard(
         mine = [r for r in rows if r["fac"] == fid]
         if not mine:
             continue
-        ev = [r for r in mine if r["rep"] is not None]
         ppms = [r["ppm"] for r in mine]
         acts = Counter(r["act"] for r in mine)
         mix = Counter(c for r in mine for c in r["reasons"])
@@ -125,7 +123,6 @@ def build_dashboard(
                 "fieldsErp": [k for k, v in fe.items() if v], "fieldsErpAll": list(fe),
             },
             "orders": len(mine), "ppmMed": round(float(np.median(ppms))), "ppmP90": round(float(np.quantile(ppms, 0.9))),
-            "disc": round(float(np.mean([r["disc"] for r in ev])), 4) if ev else None, "trustLow": fid in trust_low,
             "kappa": round(float(explain["kappa"].get(fid, explain["kappa_pooled"])), 4), "kappaObs": int(max(kobs, 0)),
             "actions": {a: acts.get(a, 0) for a in ("review_needed", "none")},
             "reasonMix": dict(mix),

@@ -6,7 +6,6 @@
   GET  /api/dashboard                최신 채점의 화면 JSON — site 는 자기 공장만 (admin·site)
   GET  /api/scores                   최신 채점 행 (admin·site)
   GET  /                             공장 관제(그리드 → 공장 상세). 데이터는 /api/dashboard 에서 fetch
-  GET  /classic                      09-07 관제 화면(표·매트릭스). 같은 데이터
 """
 
 from __future__ import annotations
@@ -101,10 +100,6 @@ def create_app(eng: Engine) -> FastAPI:
     @app.get("/", include_in_schema=False)
     def index() -> HTMLResponse:
         return HTMLResponse((STATIC / "공장관제.html").read_text().replace("__DATA__", "__LIVE__"))
-
-    @app.get("/classic", include_in_schema=False)
-    def classic() -> HTMLResponse:
-        return HTMLResponse((STATIC / "관제.html").read_text().replace("__DATA__", "__LIVE__"))
 
     return app
 
