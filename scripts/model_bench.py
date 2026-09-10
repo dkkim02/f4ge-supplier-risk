@@ -10,6 +10,12 @@
 함께: 공장 파라미터 분해(p·d·b)가 진실을 얼마나 따라가는가.
 
     python scripts/model_bench.py            → docs/_모델_벤치.md
+
+⚠ 「딥러닝이 진 것은 라벨 330건 때문」은 **절반만 맞다**(2026-09-10).
+  scripts/dl_fair_bench.py 재측정: 여기 mlp 는 공장 identity 를 못 받았고 피처 42개를 받았다.
+  카운트 비율 하나만 주면 0.710, 구조를 모델 안에 넣으면(models/deep_kappa.py) 0.746 이다.
+  남은 격차는 κ 추정에서 conjugate 가 gradient 를 이기는 것이고, 온라인 갱신 때문이 아니다
+  (κ 고정 two_stage 도 0.824). 해석은 docs/_딥러닝_재도전.md.
 """
 
 from __future__ import annotations
