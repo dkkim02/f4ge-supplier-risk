@@ -77,14 +77,14 @@
     },
     "discrepancy": {
       "type": "number",
-      "description": "log(증거가 예상한 보고) − log(실제 보고). 양수면 증거보다 좋게 보고했다는 뜻이다. 정답값을 쓰지 않고 관측만으로 계산한다."
+      "description": "log(증거가 예상한 보고) − log(실제 보고). 양수면 증거보다 좋게 보고했다는 뜻이다. 정답값을 쓰지 않고 관측만으로 계산한다. ⚠ 2026-09-10 부터 **권고에 쓰지 않는다** — 계산은 계속하고 진단으로만 쓴다."
     },
     "discrepancy_flag": {
       "type": "boolean"
     },
     "factory_trust_low": {
       "type": "boolean",
-      "description": "이 공장의 보고 신뢰도가 하위 25% 인가. **한 오더의 불일치는 노이즈이고 공장 단위 누적이 신호다** — 실측 순위상관 오더 단위 −0.01(부호 일관 3/7) vs 공장 단위 +0.67(7/7). 불일치 쪽 검토는 이 값이 참일 때만 건다."
+      "description": "이 공장의 보고 신뢰도가 하위 25% 인가. **한 오더의 불일치는 노이즈이고 공장 단위 누적이 신호다.** ⚠ 2026-09-10 부터 **권고에 쓰지 않는다** — 진단값으로만 낸다. 편향을 통제한 세계에서는 판별 대상이 없다."
     },
     "recommended_action": {
       "type": "string",
@@ -92,7 +92,7 @@
         "none",
         "review_needed"
       ],
-      "description": "review_needed(검토 필요) 하나다 — 예측 위험 상위 10%, 또는 보고 신뢰도가 낮은 공장의 불일치 큰 오더, 또는 증거 있는 오더의 불일치 임계 초과. 무엇을 할지는 담당자가 정하고, 계약은 action_reason·action_check 로 근거만 준다. (09-08 이전의 call / tighten_inspection / site_visit 세 코드를 하나로 합쳤다.)"
+      "description": "review_needed(검토 필요) 하나다 — **예측 위험 상위 10% 하나로 걸린다**(2026-09-10). 무엇을 할지는 담당자가 정하고, 계약은 action_reason·action_check 로 근거만 준다. (09-08 이전의 call / tighten_inspection / site_visit 세 코드를 하나로 합쳤고, 09-10 에 불일치 축 둘을 껐다 — 그 축의 실제 위험 적중이 2.5%, 기저 20.2% 였다.)"
     },
     "action_trigger": {
       "type": [
@@ -105,7 +105,7 @@
         "discrepancy",
         null
       ],
-      "description": "권고가 걸린 축. risk = 예측 위험 상위 10%, discrepancy_low_trust = 신뢰도 낮은 공장의 불일치 큰 오더, discrepancy = 증거 있는 오더의 불일치 임계 초과, null = 권고 없음. 권고 코드는 review_needed 하나로 합쳤지만(09-08) **두 상품의 정밀도를 따로 재려면 축이 필요하다** — action_reason 은 사유 6종 텍스트와 섞여 축을 식별하지 못한다."
+      "description": "권고가 걸린 축. **2026-09-10 부터 risk 하나만 나온다**(예측 위험 상위 10%) 또는 null. discrepancy_low_trust · discrepancy 는 껐지만 열거값에는 남겨 둔다 — 되살릴 때 계약을 바꾸지 않기 위해서다."
     },
     "action_reason": {
       "type": [
