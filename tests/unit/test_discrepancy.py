@@ -14,8 +14,11 @@ def test_uses_no_self_reported_severity():
     assert "l1_reported_defect_rate" not in discrepancy.HARD_COLS + discrepancy.CONTEXT_COLS
 
 
-def test_ranks_factories_by_honesty(cfg):
+def test_ranks_factories_by_honesty(cfg_biased):
     """편향이 심한 공장이 불일치 상위로 올라와야 한다.
+
+    **현실 편향 세계에서만 성립한다** — 기본 설정은 2026-09-10 부터 편향을 통제하므로
+    편향 심한 공장이 0곳이고 이 순위는 정의되지 않는다.
 
     12곳 전부 보고한다(네 소스 전부, 09-08 저녁). 36개월 전체로 잰다 — 24개월(220건)로는 단일 seed 부호가 흔들렸다.
     """
@@ -24,7 +27,7 @@ def test_ranks_factories_by_honesty(cfg):
     from f4ge_supplier_risk.features.build import build
     from f4ge_supplier_risk.generator.pipeline import build_dataset
 
-    cfg = {**cfg, "scale": {**cfg["scale"], "months": 36}}
+    cfg = {**cfg_biased, "scale": {**cfg_biased["scale"], "months": 36}}
     table = build(build_dataset(cfg))
 
     from f4ge_supplier_risk.generator import masters

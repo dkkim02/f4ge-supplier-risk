@@ -6,8 +6,12 @@ from f4ge_supplier_risk.generator import reports
 from f4ge_supplier_risk.generator.production import counts_at, progress_at
 
 
-def test_reported_defects_are_understated(cfg, world):
-    """공장이 보고한 불량은 실제보다 적다. 평균이 어긋나야 불일치 탐지가 값을 한다."""
+def test_reported_defects_are_understated(cfg_biased, world_biased):
+    """공장이 보고한 불량은 실제보다 적다. 평균이 어긋나야 불일치 탐지가 값을 한다.
+
+    **현실 편향 세계에서만 성립한다** — 기본 설정은 2026-09-10 부터 편향을 통제한다.
+    """
+    cfg, world = cfg_biased, world_biased
     diffs = []
     for order, factory, product, lat, truth in world:
         rows, _ = reports.build_reports(cfg, order, factory, product, lat, truth)

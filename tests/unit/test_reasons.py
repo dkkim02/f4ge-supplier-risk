@@ -27,7 +27,10 @@ _PAIRS = (
 
 
 @pytest.mark.parametrize(("col", "mech", "negative"), _PAIRS)
-def test_pair_tracks_its_mechanism(table, truth_map, col, mech, negative):
+def test_pair_tracks_its_mechanism(table_biased, truth_map_biased, col, mech, negative):
+    """짝 관측치가 그 메커니즘을 따라가는가. **현실 편향 세계에서 잰다** —
+    기본 설정은 2026-09-10 부터 편향을 통제해 ERP 대조 짝이 흔들릴 이유가 없다."""
+    table, truth_map = table_biased, truth_map_biased
     v = table[col].to_numpy(float)
     t = np.array([truth_map[i][mech] for i in table["order_id"]], dtype=float)
     m = ~np.isnan(v)
