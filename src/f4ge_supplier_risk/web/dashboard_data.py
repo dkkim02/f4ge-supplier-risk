@@ -142,7 +142,11 @@ def build_dashboard(
         "today": today.date().isoformat(), "role": role, "rows": rows, "factories": factories,
         "kappaPooled": round(float(explain["kappa_pooled"]), 4), "metrics": {"orders": len(rows)},
         "coverage": {"a": n_a, "b": 0, "c": 0, "total": len(facs), "sources": ["MES", "CellOS", "ERP", "포지 기록"]},
-        "params": {"pooled": {k: round(float(v), 5) for k, v in (explain.get("params_pooled") or {}).items()}},
+        "params": {
+            "pooled": {k: round(float(v), 5) for k, v in (explain.get("params_pooled") or {}).items()},
+            # 폐기 비중 s — 데이터에서 뽑은 값(중앙 공장의 보고를 정직으로 두는 규약). 화면 설명문이 인용한다
+            "scrapShare": round(float(explain["scrap_share"]), 4) if explain.get("scrap_share") else None,
+        },
         "effect": EFFECT, "reasonText": reason_text, "log": log,
     }
 

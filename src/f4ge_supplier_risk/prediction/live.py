@@ -59,7 +59,9 @@ def score_from_db(eng: Engine, now: datetime | None = None, note: str = "") -> d
     scored = build_scores(train, pred_tr, disc_tr, test, pred, disc, discrepancy.reasons(train, test))
     scored["scored_at"] = now_s
     explain = two_stage.explain(train, test, LAYERS["L0+Cell+MES+ERP"])
-    explain["params_pooled"] = factory_params.estimate(train).attrs["pooled"]
+    params = factory_params.estimate(train)
+    explain["params_pooled"] = params.attrs["pooled"]
+    explain["scrap_share"] = params.attrs["scrap_share"]
 
     dash = build_dashboard(data, scored, explain, today=now)
     score_rows = [to_contract(r) for _, r in scored.iterrows()]

@@ -93,6 +93,8 @@ main{padding:22px 28px 40px;min-width:0}
 
 /* ── 화면 A: 공장 그리드 ── */
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.spark-legend{color:var(--muted);font-size:12px;line-height:18px;margin:0 0 12px}
+.spark-legend b{color:var(--text);font-weight:500}
 @media (max-width:1400px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .fac{cursor:pointer;text-align:left;border:1px solid transparent;transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;gap:12px;min-height:250px}
@@ -114,7 +116,7 @@ main{padding:22px 28px 40px;min-width:0}
 .fac .kpi .v small{font:400 10px/12px var(--sans);color:var(--muted);margin-left:2px}
 .fac .kpi .l{font-size:11px;color:var(--muted);margin-top:2px}
 .fac .kpi.zero .v{color:var(--faint)}
-.fac svg.spark{width:100%;height:40px;display:block}
+.fac svg.spark{width:100%;height:56px;display:block}
 .fac .ft{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:10px;font-size:12px;color:var(--muted)}
 .grid-sep{grid-column:1/-1;display:flex;align-items:center;gap:10px;color:var(--muted);font:500 12px/16px var(--sans);margin-top:6px}
 .grid-sep::after{content:"";flex:1;height:1px;background:var(--line-2)}
@@ -195,7 +197,10 @@ details summary::-webkit-details-marker{display:none}
       <div class="stamp" id="stamp"></div>
     </div>
 
-    <section id="viewGrid"><div class="grid" id="grid"></div></section>
+    <section id="viewGrid">
+      <div class="spark-legend">카드 아래 그래프 = 오더별 <b>예상 유출</b>(발주 시간순 · 로그 축) · 가로 점선 <b>1,000 PPM</b> · <b>12곳 공통 축</b>이라 카드끼리 높이를 비교할 수 있다</div>
+      <div class="grid" id="grid"></div>
+    </section>
 
     <section id="viewFac" hidden>
       <div class="row3">
@@ -296,17 +301,27 @@ function tbl(id, cols, rows, empty) {
     + `<tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}">${c.f(r)}</td>`).join("")}</tr>`).join("")}</tbody>`;
 }
 
-/* 스파크라인 — 이 공장 오더의 예상 불량(로그 축), 시간순. 표시된 점이 현재 오더 */
+/* 스파크라인 — 이 공장 오더의 예상 유출(PPM) 시간순. 표시된 점이 현재 오더.
+   축은 로그이고 **12곳이 같은 범위를 쓴다** — 카드끼리 높이를 비교할 수 있어야 하기 때문이다.
+   가로 점선 = 1,000 PPM(통상 고객 기대). 범위에 항상 들어오도록 lo/hi 에 끼워 넣는다. */
+const SPARK_REF = Math.log10(1000);
+const SPARK = (() => {
+  const ys = D.rows.filter(r => r.orderedAt <= TODAY).map(r => Math.log10(Math.max(r.ppm, 20)));
+  const lo = Math.min(SPARK_REF, ...ys) - 0.1, hi = Math.max(SPARK_REF, ...ys) + 0.1;
+  return { lo, span: Math.max(hi - lo, 0.3) };
+})();
+
 function spark(rows, cur) {
   const pts = [...rows].filter(r => r.orderedAt <= TODAY).sort((a, b) => a.day - b.day);
-  if (pts.length < 2) return `<svg class="spark" viewBox="0 0 200 40"></svg>`;
+  if (pts.length < 2) return `<svg class="spark" viewBox="0 0 200 56"></svg>`;
   const ys = pts.map(p => Math.log10(Math.max(p.ppm, 20)));
-  const lo = Math.min(...ys), hi = Math.max(...ys), span = Math.max(hi - lo, 0.3);
-  const X = i => (i / (pts.length - 1)) * 196 + 2, Y = v => 36 - ((v - lo) / span) * 28;
+  const X = i => (i / (pts.length - 1)) * 196 + 2, Y = v => 50 - ((v - SPARK.lo) / SPARK.span) * 44;
   const line = ys.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
   const ci = cur ? pts.indexOf(cur) : -1;
-  return `<svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
-    <path d="${line}L198,40L2,40Z" fill="#1b59f8" opacity=".10"/>
+  return `<svg class="spark" viewBox="0 0 200 56" preserveAspectRatio="none" aria-hidden="true">
+    <line x1="0" x2="200" y1="${Y(SPARK_REF).toFixed(1)}" y2="${Y(SPARK_REF).toFixed(1)}"
+          stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".55"/>
+    <path d="${line}L198,56L2,56Z" fill="#1b59f8" opacity=".10"/>
     <path d="${line}" fill="none" stroke="#1b59f8" stroke-width="1.6" stroke-linejoin="round"/>
     ${ci >= 0 ? `<circle cx="${X(ci).toFixed(1)}" cy="${Y(ys[ci]).toFixed(1)}" r="3" fill="#fff" stroke="#1b59f8" stroke-width="1.8"/>` : ""}
   </svg>`;
@@ -451,7 +466,7 @@ function renderFac(id) {
       <div class="fbox out"><div class="fl">예상 유출 불량 · ${outLabel}</div><div class="fv">${fmt(outPpm)} PPM</div><div class="fd">고객에게 도달하는 값 (2단 모델). 분해식 그대로 곱하면 ${fmt(decomp)} PPM</div></div>
     </div>`;
   document.getElementById("whyNote").innerHTML =
-    `<b>제조 품질</b>은 ERP 자재 소진 − Cell 카운터로 나온 <b>물리적 폐기</b>를 폐기 비중 가정(11.5%)으로 되돌려 잡은 불량을 추정하고, 우리 입고검사가 잡은 유출을 더한 값이다.
+    `<b>제조 품질</b>은 ERP 자재 소진 − Cell 카운터로 나온 <b>물리적 폐기</b>를 폐기 비중${D.params?.scrapShare ? `(${pct(D.params.scrapShare, 1)}, 중앙 공장의 보고를 정직으로 두고 데이터에서 뽑은 값)` : ""}으로 되돌려 잡은 불량을 추정하고, 우리 입고검사가 잡은 유출을 더한 값이다.
      <b>검수 품질</b>은 그 잡은 불량 ÷ (잡은 + 유출).
      유출 라벨이 희소해 검출률의 공장 간 순위 정밀도는 낮다(합성 검증 ρ 0.49). 제조 품질 순위는 높다(오더 ρ 0.92).`;
 
