@@ -46,7 +46,8 @@ def build_truth(
         size=n_defect,
         p=[mix["critical"], mix["major"], mix["minor"]],
     )
-    caught = rng.random(n_defect) < factory["detection_rate"]
+    # 오더별 검출률(latent). detection_order_sd = 0 이면 공장 상수와 같은 값이다.
+    caught = rng.random(n_defect) < latents.get("detection_rate_order", factory["detection_rate"])
     scrap_share = float(rng.uniform(*_SCRAP_SHARE))
     is_scrap = caught & (rng.random(n_defect) < scrap_share)
     is_rework = caught & ~is_scrap

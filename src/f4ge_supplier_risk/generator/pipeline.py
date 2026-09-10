@@ -102,6 +102,7 @@ def build_dataset(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
                 "true_defect_count": truth["n_defect"],
                 "escaped_total": truth["escaped_total"],
                 "detection_rate_true": factory["detection_rate"],
+                "detection_rate_order": lat.get("detection_rate_order", factory["detection_rate"]),
                 "reported_defect_rate": round(reported_rate, 6)
                 if reported_rate is not None
                 else None,

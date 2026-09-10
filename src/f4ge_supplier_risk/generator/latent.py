@@ -77,11 +77,24 @@ def order_latents(
         + _W_RANDOM * noise
     )
     internal = 1.0 / (1.0 + math.exp(-logit))
-    escape = internal * (1.0 - factory["detection_rate"])
+
+    # 검출률 — 기본은 공장 상수다(κ = (1−d)/d 가 공장당 하나). `detection_order_sd` 를 올리면
+    # 오더마다 logit 공간에서 흔들려 그 전제가 깨진다. **0 에서는 난수를 뽑지 않는다** —
+    # 뽑으면 이후 스트림이 밀려 σ=0 재현성이 깨진다.
+    d_sd = float(cfg["assumptions"].get("detection_order_sd", 0.0) or 0.0)
+    detection = float(factory["detection_rate"])
+    if d_sd > 0.0:
+        d = min(max(detection, 1e-6), 1 - 1e-6)
+        z = float(rng.normal(0.0, 1.0))
+        detection = 1.0 / (1.0 + math.exp(-(math.log(d / (1 - d)) + d_sd * z)))
+        detection = min(max(detection, 0.30), 0.9995)
+
+    escape = internal * (1.0 - detection)
 
     return {
         "internal_defect_rate_true": internal,
         "escape_rate_true": escape,
+        "detection_rate_order": detection,
         "state_t": float(state_t),
         "schedule_pressure": float(pressure),
         "material_effect": material,
