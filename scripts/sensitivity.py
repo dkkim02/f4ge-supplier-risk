@@ -44,6 +44,10 @@ SWEEPS: dict[str, tuple[str, tuple]] = {
     "report_noise_cv": ("보고의 들쭉날쭉함", (0.0, 0.45, 0.9, 1.5)),
     # 09-08 추가 — MES 하한의 아래끝. 두 상품의 비중을 정한다(docs/불일치탐지.md §4-1). 위끝은 1.0 고정.
     "mes_input_floor": ("MES 입력 정직도 하한", (0.02, 0.3, 0.55, 0.8)),
+    # 09-10 추가 — CTO 질문 22 의 답이 「상관 있다」인데 생성기 기본값은 0.0(독립)이라 어긋난다.
+    # config 를 바꾸면 지금까지 숫자가 전부 무효가 되므로, 축으로 넣어 한 번에 판정한다.
+    # 음수 = 나쁜 공장일수록 더 축소 보고(generator/masters.py:93, capability_z 는 클수록 나쁜 공장).
+    "bias_capability_corr": ("나쁜 공장이 더 숨기는가", (0.0, -0.3, -0.6, -0.85)),
 }
 
 
@@ -104,7 +108,7 @@ def main() -> None:
     lines: list[str] = []
     all_delta: list[float] = []
     all_gap: list[float] = []
-    # 축을 인자로 고를 수 있다 — 7축 × 4값 × 8 seed 는 한 프로세스로 15분이 넘어 둘로 나눠 돈다.
+    # 축을 인자로 고를 수 있다 — 8축 × 4값 × 8 seed 는 한 프로세스로 15분이 넘어 나눠 돈다.
     keys = [k for k in sys.argv[1:] if k in SWEEPS] or list(SWEEPS)
 
     for key in keys:

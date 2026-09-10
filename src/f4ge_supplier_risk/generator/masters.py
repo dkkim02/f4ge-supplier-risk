@@ -83,8 +83,9 @@ def build_factories(cfg: dict[str, Any], products: list[dict[str, Any]]) -> list
                 "capability": capability,
                 "detection_rate": detection,
                 # 나쁜 공장이 더 숨기는가? 지금 기본값은 **독립**(0.0)이다.
-                # 현실에서 상관이 있다면 불일치 탐지가 나쁜 오더까지 함께 잡는다 —
-                # 우리가 관측으로 확인할 수 없는 성질이라 CTO 확인 항목으로 올려 뒀다.
+                # 현실에서 상관이 있다면 불일치 탐지가 나쁜 오더까지 함께 잡는다.
+                # 2026-09-10 대표 답은 「상관 있다」 — 기본값과 어긋난다. 관측으로 확인할 수 없어
+                # config 를 바꾸는 대신 민감도 축으로 판정한다(scripts/sensitivity.py).
                 "report_bias": float(
                     np.clip(
                         a["report_bias_mean"]
