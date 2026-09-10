@@ -47,14 +47,20 @@ _RISK_Q = (0.60, 0.90, 0.97)
 _RISK_NAMES = ("low", "medium", "high", "critical")
 
 # 검토 threshold. 둘 중 하나라도 넘으면 `review_needed`.
-#   ① 예측 위험 상위 10% (_RISK_TIGHTEN_Q — 위험 등급 high 컷과 같은 선)
-#   ② **신뢰도가 낮은 공장**(불일치 평균 상위 25%, _TRUST_GATE_Q)의 오더 중 불일치가 학습 분위 0.90 을 넘는 것(_DISC_VISIT_Q)
+#   ① 예측 위험 상위 10% (_RISK_TIGHTEN_Q — 위험 등급 high 컷과 같은 선)  ← 2026-09-10 부터 이것 하나만 산다
 # 오더 단독 불일치 축(_DISC_CALL_Q)은 **끈다(None)** — 09-08 저녁 sweep(8 seed, scripts/review_threshold_sweep.py):
 #   네 소스가 12곳 전부에서 오자 이 축이 전 오더에 걸려 100건 중 35건이 검토 필요가 됐고 정밀도는 기저 수준이었다.
 #   끄고 ②를 0.90 으로 올리면 14.5건 · 실제 위험 정밀도 27% → 57% · 불일치 축의 편향 공장 정밀도 52% → 57%(기저 50%).
 #   한 오더의 불일치는 노이즈, 공장 단위 누적이 신호라는 실측(불일치탐지.md §2)과 같은 결론이다.
+#
+# 2026-09-10 — **불일치+저신뢰 축(_DISC_VISIT_Q)도 끈다.** 남는 축은 예측 위험 하나다.
+#   8 seed 실측(편향 통제 세계): 이 축이 넣는 6.2건의 실제 위험 적중이 **2.5%** 다. 기저 20.2% 의 8분의 1.
+#   위험 축과 겹치지도 않는다 — 현행 16.4건 = 위험축 10.2 + 이 축 6.2 로 정확히 갈린다. 순수 추가 오염이다.
+#   끄면 16.4건 → 10.2건, 정밀도 53.7% → 86.0%, 실제로 잡는 위험 건수는 8.8 로 그대로다.
+#   통제 전에도 이 축은 편향 공장 적중이 기저 이하였다(47.6% vs 49.9%, corr -0.85 에서 43.6%).
+#   되살리려면 0.90 을 넣는다. 관련 측정은 scripts/legacy/ 로 옮겼다.
 _DISC_CALL_Q: float | None = None
-_DISC_VISIT_Q = 0.90
+_DISC_VISIT_Q: float | None = None
 _RISK_TIGHTEN_Q = 0.90
 _TRUST_GATE_Q = 0.75
 
@@ -100,8 +106,14 @@ def build_scores(
     ev_te = test["l1_rep_produced"].to_numpy(float) > 0
     if ev_tr.any():
         # _DISC_CALL_Q 가 None 이면 오더 단독 불일치 축을 끈다(한 오더의 불일치는 노이즈 — 불일치탐지.md §2)
-        disc_visit = float(np.quantile(train_disc[ev_tr], _DISC_VISIT_Q))
-        disc_call = float(np.quantile(train_disc[ev_tr], _DISC_CALL_Q)) if _DISC_CALL_Q is not None else disc_visit
+        disc_visit = (
+            float(np.quantile(train_disc[ev_tr], _DISC_VISIT_Q))
+            if _DISC_VISIT_Q is not None
+            else float("inf")
+        )
+        disc_call = (
+            float(np.quantile(train_disc[ev_tr], _DISC_CALL_Q)) if _DISC_CALL_Q is not None else disc_visit
+        )
         by_factory = (
             pd.Series(train_disc[ev_tr], index=train["factory_id"].to_numpy()[ev_tr])
             .groupby(level=0)

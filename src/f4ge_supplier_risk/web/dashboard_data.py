@@ -18,12 +18,12 @@ from f4ge_supplier_risk.models import discrepancy
 PRD = {"prd_bracket": "브래킷", "prd_shaft": "샤프트", "prd_housing": "하우징", "prd_flange": "플랜지"}
 MKT = {"eu": "유럽", "us_west": "미 서안", "us_east": "미 동안"}
 # 권고 정밀도 — 09-08 저녁, **1공장 1오더 데이터**(330건, 시간순 테스트 100건) · 권고 코드 review_needed 하나 · 8 seed.
-#   scripts/discrepancy_precision.py (a=3) · scripts/coverage_sweep.py 3 12 (note_all12).
+#   scripts/legacy/discrepancy_precision.py (a=3) · scripts/legacy/coverage_sweep.py 3 12 (note_all12).
 # 행 = [코드, 건수, 실제 상위 20% 위험 비율, 편향 심한 공장 비율]. "편향 심한 공장" = 실효 편향이 12곳 중앙값 아래.
 # ⚠ 코드 통합으로 두 축의 오더가 한 집합에 섞여 있다(축별 값은 risk_level·discrepancy_flag 로 사후 분할).
 #   900건 시절 46.2% → 330건에서 37.0%. 보고 오더의 편향 공장 정밀도는 기저와 같다(40.8 vs 42.0%).
 # 09-08 저녁 3차 — 네 소스 12곳 전부(유형 폐기) · 1공장 1오더 330건 · review_needed 단일 코드 · 8 seed
-#   scripts/discrepancy_precision.py · scripts/model_bench.py(순위상관 0.787). 12곳 전부 보고하므로 "보고 있는 오더" 행 = 전체.
+#   scripts/legacy/discrepancy_precision.py · scripts/model_bench.py(순위상관 0.787). 12곳 전부 보고하므로 "보고 있는 오더" 행 = 전체.
 #   임계 재조정(scripts/review_threshold_sweep.py): 오더 단독 불일치 축 끔 · 신뢰 낮은 공장 × 불일치 0.90 → 100건 중 14.5건, 정밀도 56.5%(기저 20.2%, 2.8배).
 EFFECT = {
     "seeds": 8, "reporting": 12, "n_test": 100,
