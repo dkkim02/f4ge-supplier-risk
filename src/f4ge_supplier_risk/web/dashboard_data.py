@@ -24,7 +24,8 @@ MKT = {"eu": "유럽", "us_west": "미 서안", "us_east": "미 동안"}
 #   900건 시절 46.2% → 330건에서 37.0%. 보고 오더의 편향 공장 정밀도는 기저와 같다(40.8 vs 42.0%).
 # 09-08 저녁 3차 — 네 소스 12곳 전부(유형 폐기) · 1공장 1오더 330건 · review_needed 단일 코드 · 8 seed
 #   scripts/legacy/discrepancy_precision.py · scripts/model_bench.py(순위상관 0.787). 12곳 전부 보고하므로 "보고 있는 오더" 행 = 전체.
-#   임계 재조정(scripts/review_threshold_sweep.py): 오더 단독 불일치 축 끔 · 신뢰 낮은 공장 × 불일치 0.90 → 100건 중 14.5건, 정밀도 56.5%(기저 20.2%, 2.8배).
+#   임계(2026-09-10): 불일치 축을 전부 끄고 예측 위험 상위 10% 하나만 남겼다 → 100건 중 9.6건, 정밀도 92.2%(기저 20.2%, 4.6배).
+#   옛 값(불일치 축 포함) 14.5건 · 56.5% 는 폐기. 근거는 scripts/legacy/review_threshold_sweep.py 가 아니라 score.py 주석에 있다.
 EFFECT = {
     "seeds": 8, "reporting": 12, "n_test": 100,
     "rows": [["review_needed", 14.5, 0.565, 0.476], ["review_needed_reporting", 14.5, None, 0.574],

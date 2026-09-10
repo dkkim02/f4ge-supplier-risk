@@ -48,7 +48,7 @@ _RISK_NAMES = ("low", "medium", "high", "critical")
 
 # 검토 threshold. 둘 중 하나라도 넘으면 `review_needed`.
 #   ① 예측 위험 상위 10% (_RISK_TIGHTEN_Q — 위험 등급 high 컷과 같은 선)  ← 2026-09-10 부터 이것 하나만 산다
-# 오더 단독 불일치 축(_DISC_CALL_Q)은 **끈다(None)** — 09-08 저녁 sweep(8 seed, scripts/review_threshold_sweep.py):
+# 오더 단독 불일치 축(_DISC_CALL_Q)은 **끈다(None)** — 09-08 저녁 sweep(8 seed, scripts/legacy/review_threshold_sweep.py):
 #   네 소스가 12곳 전부에서 오자 이 축이 전 오더에 걸려 100건 중 35건이 검토 필요가 됐고 정밀도는 기저 수준이었다.
 #   끄고 ②를 0.90 으로 올리면 14.5건 · 실제 위험 정밀도 27% → 57% · 불일치 축의 편향 공장 정밀도 52% → 57%(기저 50%).
 #   한 오더의 불일치는 노이즈, 공장 단위 누적이 신호라는 실측(불일치탐지.md §2)과 같은 결론이다.

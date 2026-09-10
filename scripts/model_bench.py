@@ -67,17 +67,15 @@ def main() -> None:
 
         P = fp.estimate(tr)
         d_true = [facs[i]["detection_rate"] for i in P.index]
-        b_true = [max(facs[i]["report_bias"], facs[i]["mes_input_bias"]) for i in P.index]
         p_true_f = df.groupby("factory_id")["true_internal_rate"].mean().reindex(P.index)
         p_ord = fp.order_internal_rate(te, P)
         rec["d_rho"] = spearmanr(P["d"], d_true).statistic
-        rec["b_rho"] = spearmanr(P["b"], b_true).statistic
         rec["pf_rho"] = spearmanr(P["p"], p_true_f).statistic
         rec["p_order_rho"] = spearmanr(p_ord, te["true_internal_rate"]).statistic
         rec["esc_decomp_rho"] = spearmanr(fp.order_escape_rate(te, P, p_ord), te["true_escape_rate"]).statistic
         rows.append(rec)
         print(f"  seed {seed:>9}  " + "  ".join(f"{k} {rec[f'rank_{k}']:+.3f}" for k in preds) +
-              f"  | p_order {rec['p_order_rho']:+.2f} d {rec['d_rho']:+.2f} b {rec['b_rho']:+.2f}", flush=True)
+              f"  | p_order {rec['p_order_rho']:+.2f} d {rec['d_rho']:+.2f}", flush=True)
 
     t = pd.DataFrame(rows).set_index("seed")
     mean, std = t.mean(), t.std()
@@ -88,10 +86,10 @@ def main() -> None:
              "| 후보 | 진짜 escape 순위상관 | ±sd | binomial log loss | 1위 seed 수 |", "|---|---|---|---|---|"]
     for k in names:
         lines.append(f"| {'**' + k + '**' if k == best else k} | {mean[f'rank_{k}']:+.3f} | {std[f'rank_{k}']:.3f} | {mean[f'll_{k}']:.5f} | {wins[k]}/{len(SEEDS)} |")
-    lines += ["", "## 공장 파라미터 분해 (제조 품질 p · 검수 품질 d · 보고 정직도 b) — 진실과의 Spearman", "",
+    lines += ["", "## 공장 파라미터 분해 (제조 품질 p · 검수 품질 d) — 진실과의 Spearman", "",
               "| 값 | 평균 | ±sd | 양수 seed |", "|---|---|---|---|"]
     for k, label in (("p_order_rho", "오더별 내부 불량률 p (테스트 오더)"), ("pf_rho", "공장 내부 불량률 p_f (12곳)"),
-                     ("d_rho", "검출률 d (12곳)"), ("b_rho", "보고 정직도 b vs 실효 편향 (12곳)"),
+                     ("d_rho", "검출률 d (12곳)"),  # 보고 정직도 b 행은 09-10 삭제 — 편향 통제로 상수가 되어 Spearman 이 nan
                      ("esc_decomp_rho", "분해로 낸 escape = p·(1−d) 순위상관")):
         lines.append(f"| {label} | {mean[k]:+.3f} | {std[k]:.3f} | {int((t[k] > 0).sum())}/{len(SEEDS)} |")
     lines += ["", f"MLP {'포함' if HAS_MLP else '제외 (torch 없음)'} · 후보 정의는 scripts/model_bench.py 머리말."]

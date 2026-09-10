@@ -44,35 +44,33 @@ def main() -> None:
 
     rows = []
     for s_bar in SHARES:
-        m = {k: [] for k in ("p_order_rho", "pf_rho", "d_rho", "b_rho", "p_ratio", "d_gap", "b_ratio")}
+        m = {k: [] for k in ("p_order_rho", "pf_rho", "d_rho", "p_ratio", "d_gap")}
         for p in pre:
             P = fp.estimate(p["tr"], scrap_share=s_bar)
             facs = p["facs"]
             d_true = np.array([facs[i]["detection_rate"] for i in P.index])
-            b_true = np.array([max(facs[i]["report_bias"], facs[i]["mes_input_bias"]) for i in P.index])
             p_true = p["p_true_f"].reindex(P.index).to_numpy()
             p_ord = fp.order_internal_rate(p["te"], P)
             m["p_order_rho"].append(spearmanr(p_ord, p["te"]["true_internal_rate"]).statistic)
             m["pf_rho"].append(spearmanr(P["p"], p_true).statistic)
             m["d_rho"].append(spearmanr(P["d"], d_true).statistic)
-            m["b_rho"].append(spearmanr(P["b"], b_true).statistic)
             m["p_ratio"].append(float(np.median(P["p"].to_numpy() / p_true)))
             m["d_gap"].append(float(np.median(P["d"].to_numpy() - d_true)))
-            m["b_ratio"].append(float(np.median(P["b"].to_numpy() / b_true)))
         rows.append({"s_bar": s_bar, **{k: float(np.nanmean(v)) for k, v in m.items()}})
-        print(f"  s̄={s_bar:.3f}  p_order ρ {rows[-1]['p_order_rho']:+.3f}  d ρ {rows[-1]['d_rho']:+.3f}  b ρ {rows[-1]['b_rho']:+.3f}  "
-              f"| p 눈금 ×{rows[-1]['p_ratio']:.2f}  d 편차 {rows[-1]['d_gap']:+.3f}  b 눈금 ×{rows[-1]['b_ratio']:.2f}", flush=True)
+        print(f"  s̄={s_bar:.3f}  p_order ρ {rows[-1]['p_order_rho']:+.3f}  d ρ {rows[-1]['d_rho']:+.3f}  "
+              f"| p 눈금 ×{rows[-1]['p_ratio']:.2f}  d 편차 {rows[-1]['d_gap']:+.3f}", flush=True)
 
     t = pd.DataFrame(rows)
     lines = [f"# 폐기 비중 가정 s̄ 민감도 — {len(SEEDS)} seed · 생성기 진실 0.03~0.20 (평균 0.115)", "",
-             "| s̄ | 오더 p 순위 ρ | 공장 p 순위 ρ | 검출률 d 순위 ρ | 정직도 b 순위 ρ | p 눈금 (추정/진실 중앙) | d 편차 (추정−진실 중앙) | b 눈금 (추정/진실 중앙) |",
-             "|---|---|---|---|---|---|---|---|"]
+             "| s̄ | 오더 p 순위 ρ | 공장 p 순위 ρ | 검출률 d 순위 ρ | p 눈금 (추정/진실 중앙) | d 편차 (추정−진실 중앙) |",
+             "|---|---|---|---|---|---|"]
     for _, r in t.iterrows():
         mark = "**" if abs(r.s_bar - fp.SCRAP_SHARE) < 1e-9 else ""
-        lines.append(f"| {mark}{r.s_bar:.3f}{mark} | {r.p_order_rho:+.3f} | {r.pf_rho:+.3f} | {r.d_rho:+.3f} | {r.b_rho:+.3f} | ×{r.p_ratio:.2f} | {r.d_gap:+.3f} | ×{r.b_ratio:.2f} |")
+        lines.append(f"| {mark}{r.s_bar:.3f}{mark} | {r.p_order_rho:+.3f} | {r.pf_rho:+.3f} | {r.d_rho:+.3f} | ×{r.p_ratio:.2f} | {r.d_gap:+.3f} |")
     lines += ["", "순위(ρ)는 s̄ 에 거의 불변이다 — b 는 대수적으로 완전 불변, p·d 는 유출 항 때문에 소수점 둘째 자리에서 움직인다.",
               "눈금은 s̄ 에 비례해 움직인다: s̄ 를 반으로 줄이면 잡은 불량 추정이 2배가 되어 p 가 커지고 b 가 작아진다.",
-              "→ 화면의 **순위·비교**는 가정에 안전하고, **절대값**(내부 불량률 %, 정직도 %)은 s̄ 를 실측(공장 폐기 대장 · 재작업 대장)으로 고정한 뒤에만 인용한다."]
+              "→ 순위는 s̄ 에 안전하다. **2026-09-10 이후 절대값도 쓸 수 있다** — 편향을 통제해 b = 1 이 되면서 "
+             "s̄ 가 데이터에서 결정되고(1/median(R/S)) p 눈금이 진실 대비 1.006 이 됐다. 「% 숨기기」 규칙은 폐기됐다."]
     out = Path(__file__).resolve().parents[1] / "docs" / "_폐기비중_민감도.md"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n" + "\n".join(lines))

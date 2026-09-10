@@ -17,3 +17,6 @@
 올려도 43.6%. 불일치 축은 편향 공장 판별에 기여가 없었다.
 
 되돌리려면 `tests/conftest.py` 의 `REALISTIC_BIAS` 를 설정에 얹어 돌린다.
+- `review_threshold_sweep.py` — 세 임계 중 둘이 불일치 축이고 `prec_biased` 는 편향 공장을 요구한다
+
+⚠ 남은 임계 `_RISK_TIGHTEN_Q`(예측 위험 상위 10%) 하나를 고를 sweep 이 없다. 새로 써야 한다.
