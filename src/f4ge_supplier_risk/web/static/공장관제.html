@@ -7,10 +7,12 @@
    페이지 #f9f9f9 · 카드 #ffffff r20 · 그림자 0 5px 20px rgba(0,0,0,.05) · 사이드바 250px
    본문 #151e23 · 보조 #838383 · 강조 #1b59f8 · 선택 #f2f7ff · 구분선 #eff0f6 · 12/14/16 · 큰 숫자 Bold 24
    글꼴: Spoqa Han Sans Neo (spoqa.github.io 웹폰트, 400/500/700 — 600 없음이라 중간 강조는 500).
-   색 채널은 셋으로 가른다(09-07 규칙 승계): 위험 4-tier = 컬러 · 검토 필요 = 무채색(짙은 배경 반전) · 불일치 = 보라. 서로 빌리지 않는다.
+   색 채널은 둘로 가른다(09-07 규칙 승계, 09-10 불일치 채널 폐기): 위험 4-tier = 컬러 · 검토 필요 = 무채색(짙은 배경 반전). 서로 빌리지 않는다.
    전제(09-08 저녁): **한 공장은 한 번에 한 오더만 돈다.** 카드 = 그 공장의 현재 오더. 출하 뒤 입고검사 결과를 기다리는 오더는 "결과 대기".
-   소스(09-08 저녁): FactoryOS 에 MES · CellOS · ERP · 포지 기록 네 곳이 12곳 전부에서 온다. 연동/미연동 구분 없음. 차이는 보고 품질(형식·필드·성실도·정직도).
-   목표 둘(사용자): 제조 품질(내부 불량률 p) · 검수 품질(검출률 d). 보고 정직도 b 가 둘을 가른다. κ 는 화면에서 뺐다 — (1−d)/b 로 분해해 보인다. */
+   소스(09-08 저녁): FactoryOS 에 MES · CellOS · ERP · 포지 기록 네 곳이 12곳 전부에서 온다. 연동/미연동 구분 없음.
+   공장 차이(09-10): **물리적인 것만** — 무엇을 만드는가 · 제조 능력 · 검출 능력 · 공정 드리프트. 보고 편향·성실도는 통제했다.
+   목표 둘(사용자): 제조 품질(내부 불량률 p) · 검수 품질(검출률 d). κ 는 화면에서 뺐다 — 분해해 보인다.
+   2026-09-10: 보고 정직도 b 와 불일치는 화면에서 뺐다. b 는 통제 세계에서 항상 1.0 이고, 불일치 축은 검토 필요에서 제거됐다. */
 :root{
   --page:#f9f9f9; --card:#fff; --line:#eff0f6; --line-2:#e4e5e7;
   --text:#151e23; --text-2:#4d4d4d; --muted:#838383; --faint:#b5bec6;
@@ -20,7 +22,6 @@
   --risk-medium-bg:#fff4e0; --risk-medium-tx:#9a5b00;
   --risk-high-bg:#ffe8e1; --risk-high-tx:#c2410c;
   --risk-critical-bg:#fde0e5; --risk-critical-tx:#b3122b;
-  --gap-bg:#efe9ff; --gap-tx:#5b3fd6;
   --good:#1fe08f; --bad:#ff3e13;
   --sans:"Spoqa Han Sans Neo","Apple SD Gothic Neo","Pretendard","Noto Sans KR",-apple-system,system-ui,sans-serif;
   --mono:"SF Mono",Menlo,Consolas,monospace;
@@ -79,7 +80,6 @@ main{padding:22px 28px 40px;min-width:0}
 .chip.risk.critical{background:var(--risk-critical-bg);color:var(--risk-critical-tx)}
 .chip.act{background:var(--text);color:#fff}
 .chip.act.none{background:var(--line);color:var(--muted)}
-.chip.gap{background:var(--gap-bg);color:var(--gap-tx)}
 .chip.mes{background:var(--accent-bg);color:var(--accent)}
 .chip.nomes{background:none;border:1px dashed var(--faint);color:var(--muted);font-weight:400}
 .chip.prd{background:#f4f5f7;color:var(--text-2);font-weight:400}
@@ -231,7 +231,7 @@ details summary::-webkit-details-marker{display:none}
       <div class="card">
         <div class="card-h"><div class="card-t">검토 필요 — 진행 중 오더</div><div class="card-s" id="qSub"></div></div>
         <div class="wrap"><table id="tQueue"></table></div>
-        <div class="note">권고는 <b>검토 필요</b> 하나다. 무엇을 할지는 담당자가 정한다. 「어긋난 것」은 왜 걸렸는지(예측 위험 상위 10% 또는 보고와 증거의 불일치), 「확인할 것」은 무엇을 대조할지다.</div>
+        <div class="note">권고는 <b>검토 필요</b> 하나다. 무엇을 할지는 담당자가 정한다. 「어긋난 것」은 왜 걸렸는지(예측 위험 상위 10%), 「확인할 것」은 무엇을 대조할지다.</div>
       </div>
     </section>
   </main>
@@ -269,7 +269,6 @@ const PERIOD = { daily: "일 집계", shift: "시프트 집계", weekly: "주 �
 const profChip = f => { const pf = f.profile || {}; const n = (pf.fieldsMes || []).length + (pf.fieldsErp || []).length, m = (pf.fieldsMesAll || []).length + (pf.fieldsErpAll || []).length;
   return `<span class="chip mes" title="MES 집계 주기 · 채우는 선택 필드 수">${PERIOD[pf.period] || "—"} · 필드 ${n}/${m}</span>`; };
 const pct = (v, d = 1) => v == null || Number.isNaN(v) ? "—" : (v * 100).toFixed(d) + "%";
-const gapChip = r => r.discFlag ? `<span class="chip gap">${r.disc > 0 ? "+" : ""}${r.disc.toFixed(2)}</span>` : `<span class="mono sub">${r.disc.toFixed(2)}</span>`;
 const dash = `<span class="faint">—</span>`;
 const bar = p => `<span class="bar"><i class="${p > 1 ? "over" : ""}" style="width:${Math.min(Math.max(p, 0), 1) * 100}%"></i></span>`;
 const progText = r => r.orderedAt > TODAY ? `<span class="sub">발주 전</span>` : r.prog > 1 ? `<span class="mono" style="color:var(--risk-high-tx)">납기 +${Math.round((Math.min(r.prog, 1.35) - 1) * 100)}%</span>` : `<span class="mono">${Math.round(r.prog * 100)}%</span>`;
@@ -361,7 +360,6 @@ document.getElementById("navQueue").onclick = () => go("queue");
       ${spark(mine, cur)}
       <div class="ft">
         <span>결과 대기 <b class="mono" style="font-weight:500">${waiting.length}</b>건 · 공장 중앙 <b class="mono" style="font-weight:500">${fmt(f.ppmMed)}</b> PPM</span>
-        ${SITE ? "" : `<span>보고 정직도 <b class="mono" style="font-weight:500">${pct(f.honesty, 0)}</b>${f.trustLow ? ` <span class="chip gap">불일치 반복</span>` : ""}</span>`}
       </div>
     </button>`;
   document.getElementById("grid").innerHTML =
@@ -380,7 +378,6 @@ document.getElementById("navQueue").onclick = () => go("queue");
     { h: "위험", f: r => riskChip(r.risk) },
     { h: "내부 불량률", n: 1, f: r => `<span class="mono">${pct(r.internal)}</span>` },
     { h: "예상 유출", n: 1, f: r => `<b class="mono" style="font-weight:500">${fmt(r.ppm)}</b> <span class="sub">PPM</span>` },
-    ...(SITE ? [] : [{ h: "불일치", n: 1, f: gapChip }]),
     { h: "납기", n: 1, f: r => `<span class="mono">${r.promised.slice(5)}</span>` },
     { h: "진척", n: 1, f: progText },
     { h: "어긋난 것 · 확인할 것", f: r => `<div class="why">${whyCell(r)}${r.check ? `<div class="sub">${r.check}</div>` : ""}</div>` },
@@ -392,7 +389,7 @@ document.getElementById("navQueue").onclick = () => go("queue");
 function renderFac(id) {
   const f = F.find(x => x.id === id); if (!f) return go("grid");
   const { mine, cur, extra, waiting, done, upcoming } = facState(f);
-  document.getElementById("title").innerHTML = `${facName(id)} <span class="chip prd" style="vertical-align:middle;font-size:12px">${f.prd}</span> ${profChip(f)}${!SITE && f.trustLow ? ` <span class="chip gap">불일치 반복</span>` : ""}${f.region ? ` <span class="sub">${f.region}</span>` : ""}`;
+  document.getElementById("title").innerHTML = `${facName(id)} <span class="chip prd" style="vertical-align:middle;font-size:12px">${f.prd}</span> ${profChip(f)}${f.region ? ` <span class="sub">${f.region}</span>` : ""}`;
 
   /* 상단 ① 현재 상황 — 현재 오더 하나 */
   document.getElementById("cNow").innerHTML = cur ? `
@@ -436,11 +433,9 @@ function renderFac(id) {
     ${gauge(f.internal, PP.p ?? f.internal, 0, Math.max(0.12, (PP.p || 0.04) * 3))}
     <div class="sub">세로선 = 12곳 평균 ${pct(PP.p, 2)} · 오른쪽일수록 공장 안에서 불량이 많이 난다</div>
     <div class="kv" style="margin-top:10px"><span class="k">검수 품질 · 검출률</span><span class="v">${pct(f.detection)} <span class="sub">평균 ${pct(PP.d)}</span></span></div>
-    ${SITE ? "" : `<div class="kv"><span class="k">보고 정직도 · 보고한 불량 ÷ 물리 증거</span><span class="v">${pct(f.honesty, 0)} <span class="sub">평균 ${pct(PP.b, 0)}</span></span></div>`}
     <div class="kv"><span class="k">보고 형식</span><span class="v" style="font-weight:400">${PERIOD[pf.period] || "—"} · ${pf.unit === "lot" ? `로트 ${pf.lotSize}개 단위` : "개 단위"} · ${pf.codeScheme === "local" ? "자체 불량코드" : "표준 불량코드"}</span></div>
     <div class="kv"><span class="k">채우는 선택 필드</span><span class="v">${nF}/${mF} <span class="sub">MES ${(pf.fieldsMes || []).length}/${(pf.fieldsMesAll || []).length} · ERP ${(pf.fieldsErp || []).length}/${(pf.fieldsErpAll || []).length}</span></span></div>
     <div class="kv"><span class="k">초도품 검사(FAI) 제출률</span><span class="v">${(f.faiRate * 100).toFixed(0)}%</span></div>
-    ${SITE ? "" : `<div class="kv"><span class="k">불일치 평균 (보고 vs 증거)</span><span class="v"><span class="mono">${f.disc > 0 ? "+" : ""}${f.disc.toFixed(2)}</span>${f.trustLow ? ` <span class="chip gap">하위 25%</span>` : ""}</span></div>`}
     <div class="kv"><span class="k">전체 이력 로트 불합격률</span><span class="v">${(f.histRejRate * 100).toFixed(1)}%</span></div>`;
 
   /* 하단 좌 ① 왜 이렇게 예측하는가 — 제조 품질 × (1 − 검수 품질) = 유출 */
@@ -449,7 +444,7 @@ function renderFac(id) {
   const repCur = cur && cur.rep != null ? cur.rep : null;
   document.getElementById("whySub").textContent = "유출 = 공장 안에서 난 불량 × 검수가 놓친 비율";
   document.getElementById("why").innerHTML = `<div class="formula">
-      <div class="fbox"><div class="fl">① 제조 품질 — 내부 불량률${cur ? " (현재 오더)" : " (공장)"}</div><div class="fv">${pct(pInt, 2)}</div><div class="fd">${repCur != null ? `MES 보고 ${pct(repCur, 2)} 을 보고 정직도 ${pct(f.honesty, 0)} 로 되돌리고 공장 수준으로 당긴 값` : "ERP·Cell 물리 폐기와 우리 입고검사로 잡은 공장 수준"}</div></div>
+      <div class="fbox"><div class="fl">① 제조 품질 — 내부 불량률${cur ? " (현재 오더)" : " (공장)"}</div><div class="fv">${pct(pInt, 2)}</div><div class="fd">${repCur != null ? `MES 보고 ${pct(repCur, 2)} 을 공장 수준으로 당긴 값` : "ERP·Cell 물리 폐기와 우리 입고검사로 잡은 공장 수준"}</div></div>
       <div class="fop">×</div>
       <div class="fbox"><div class="fl">② 검수가 놓치는 비율 = 1 − 검출률</div><div class="fv">${pct(1 - dF, 2)}</div><div class="fd">검출률 ${pct(dF)} · 12곳 평균 ${pct(PP.d)} · 입고검사 ${f.paramObs}건으로 추정</div></div>
       <div class="fop">=</div>
@@ -457,8 +452,8 @@ function renderFac(id) {
     </div>`;
   document.getElementById("whyNote").innerHTML =
     `<b>제조 품질</b>은 ERP 자재 소진 − Cell 카운터로 나온 <b>물리적 폐기</b>를 폐기 비중 가정(11.5%)으로 되돌려 잡은 불량을 추정하고, 우리 입고검사가 잡은 유출을 더한 값이다.
-     <b>검수 품질</b>은 그 잡은 불량 ÷ (잡은 + 유출). <b>보고 정직도</b>는 MES 가 보고한 잡은 불량 ÷ 물리 증거 — ${f.honesty < 0.85 ? "이 공장은 잡은 불량의 일부만 보고한다." : f.honesty > 1.1 ? "이 공장은 보고가 물리 증거보다 많다 — 재작업 판정이 넓거나 단위가 다르다." : "이 공장 보고는 물리 증거와 대체로 맞는다."}
-     유출 라벨이 희소해 검출률의 공장 간 순위 정밀도는 낮다(합성 검증 ρ≈0.5). 제조 품질 순위는 높다(ρ≈0.9).`;
+     <b>검수 품질</b>은 그 잡은 불량 ÷ (잡은 + 유출).
+     유출 라벨이 희소해 검출률의 공장 간 순위 정밀도는 낮다(합성 검증 ρ 0.49). 제조 품질 순위는 높다(오더 ρ 0.92).`;
 
   /* 하단 좌 ② 이상의 근거 — 현재 오더 하나 */
   const evEl = document.getElementById("ev"), RT = D.reasonText || {};
@@ -472,15 +467,14 @@ function renderFac(id) {
     evEl.innerHTML = `
       <div class="kv"><span class="k">권고</span><span class="v">${actChip(cur.act)}${cur.why ? ` <span class="sub">${cur.why}</span>` : ""}</span></div>
       <div class="kv"><span class="k">확인할 것</span><span class="v" style="font-weight:400">${cur.check || dash}</span></div>
-      ${SITE ? "" : `<div class="kv"><span class="k">MES 보고 불량률 → 정직도 보정 후</span><span class="v">${cur.rep == null ? `<span class="sub">미보고</span>` : `<span class="mono">${pct(cur.rep, 2)}</span> → <span class="mono">${pct(cur.internal, 2)}</span>`}</span></div>
-      <div class="kv"><span class="k">불일치 (증거가 예상한 보고 − 실제 보고)</span><span class="v">${gapChip(cur)}</span></div>`}
+      ${SITE ? "" : `<div class="kv"><span class="k">MES 보고 불량률 → 공장 수준 보정 후</span><span class="v">${cur.rep == null ? `<span class="sub">미보고</span>` : `<span class="mono">${pct(cur.rep, 2)}</span> → <span class="mono">${pct(cur.internal, 2)}</span>`}</span></div>`}
       ${!SITE ? `<div class="sub" style="margin:12px 0 8px">교차검증 짝 — MES 자기신고를 ERP·CellOS·포지 기록의 증거와 짝지어 대조. 보라 = 학습 구간 상위 15% 초과</div>
       <div class="evid">${codes.filter(c => c !== "no_evidence").map(c => `<div class="reason ${fired.includes(c) ? "fired" : ""}"><div class="t">${RT[c].t}</div><div class="c">${fired.includes(c) ? "확인할 것 · " + RT[c].c : "정상 범위"}</div></div>`).join("")}
       ${fired.includes("no_evidence") ? `<div class="reason fired"><div class="t">${RT.no_evidence.t}</div><div class="c">확인할 것 · ${RT.no_evidence.c}</div></div>` : ""}</div>` : ""}`;
   }
   document.getElementById("evNote").innerHTML = SITE
     ? `기록이 채워지면 평가가 과거 실적 쪽으로 덜 기울고 그만큼 덜 보수적으로 매겨진다 — 초도품 검사 제출, MES 집계 누락·지연이 그 항목이다.`
-    : `<b>한 오더의 불일치는 노이즈이고 같은 공장에서 반복되면 습관이다</b> — 공장 단위 판단은 누적으로 내린다(불일치 평균 · 하위 25% · 보고 정직도).
+    : `교차검증 짝은 <b>무엇을 대조할지</b>를 말하는 진단이다 — 2026-09-10 부터 검토 필요를 거는 축은 아니다(적중 2.5%, 기저 20.2%).
        사유별 「확인할 것」은 검토가 탐색이 아니라 검증이 되게 하기 위한 것이다.`;
 
   /* 하단 좌 ③ 결과 대기 · 최근 완료 */
@@ -492,7 +486,6 @@ function renderFac(id) {
     { h: "예측", n: 1, f: r => `<span class="mono">${fmt(r.ppm)}</span> <span class="sub">PPM</span>` },
     { h: "위험", f: r => riskChip(r.risk) },
     { h: "권고했던 것", f: r => actChip(r.act) },
-    ...(SITE ? [] : [{ h: "불일치", n: 1, f: gapChip }]),
     { h: "실제 결과", f: r => !r.late ? `<span class="sub">입고검사 대기</span>` : `<span class="mono">${r.insp}개 중 ${r.rej}</span> · ${r.lotRej ? `<span class="chip risk critical">로트 불합격</span>` : `<span class="chip st">로트 합격</span>`}` },
   ], hist, "결과 대기·완료 오더가 없습니다");
 

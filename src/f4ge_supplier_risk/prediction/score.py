@@ -92,7 +92,6 @@ def build_scores(
     pooled = params.attrs.get("pooled", {})
     fac = test["factory_id"]
     d_f = fac.map(params["d"]).fillna(pooled.get("d", np.nan)).to_numpy(float)
-    b_f = fac.map(params["b"]).fillna(pooled.get("b", np.nan)).to_numpy(float)
     p_f = fac.map(params["p"]).fillna(pooled.get("p", np.nan)).to_numpy(float)
     obs_f = fac.map(params["n_labels"]).fillna(0).to_numpy(int)
     risk_cuts = np.quantile(train_pred, _RISK_Q)
@@ -174,11 +173,12 @@ def build_scores(
             "predicted_escape": pred,
             "predicted_ppm": np.round(pred * 1e6, 1),
             "risk_level": _levels(pred, risk_cuts),
-            # ── 목표 둘 (09-08 저녁): 제조 품질 · 검수 품질. 보고 정직도는 둘을 가르는 열쇠 ──
+            # ── 목표 둘 (09-08 저녁): 제조 품질 · 검수 품질 ──
+            # 보고 정직도 b 는 2026-09-10 산출에서 뺐다 — 편향 통제 세계에서 항상 1.0 이고,
+            # 통제 전에도 「중앙 공장 = 1.0」 규약 위의 상대값이라 절대 수준이 아니었다.
             "predicted_internal_rate": np.round(internal, 5),
             "factory_internal_rate": np.round(p_f, 5),
             "factory_detection_rate": np.round(d_f, 4),
-            "factory_report_honesty": np.round(b_f, 3),
             "factory_param_obs": obs_f,
             "reported_defect_rate": test["l1_reported_defect_rate"].to_numpy(),
             "reported_missing": test["l1_rep_produced"].to_numpy() <= 0,
@@ -207,7 +207,6 @@ def to_contract(row: pd.Series) -> dict[str, Any]:
         "predicted_internal_defect_rate": float(row["predicted_internal_rate"]),
         "factory_internal_defect_rate": float(row["factory_internal_rate"]),
         "factory_detection_rate": float(row["factory_detection_rate"]),
-        "factory_report_honesty": float(row["factory_report_honesty"]),
         # 결측과 무결함은 다르다. 보고를 안 낸 오더는 0 이 아니라 null 이다.
         "reported_defect_rate": (
             None if row["reported_missing"] else float(row["reported_defect_rate"])

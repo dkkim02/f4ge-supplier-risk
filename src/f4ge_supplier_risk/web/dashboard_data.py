@@ -112,10 +112,9 @@ def build_dashboard(
         factories.append({
             "id": fid, "prd": _prd(f.get("product_id", "")), "region": f.get("region") or None,
             "type": "a", "label": "4소스", "hasMes": True, "hasCell": True,
-            # ── 목표 둘 + 정직도 (공장 파라미터 분해) ──
+            # ── 목표 둘 (공장 파라미터 분해). 정직도는 2026-09-10 제거 ──
             "internal": round(float(s0["factory_internal_rate"]), 5),
             "detection": round(float(s0["factory_detection_rate"]), 4),
-            "honesty": round(float(s0["factory_report_honesty"]), 3),
             "paramObs": int(s0["factory_param_obs"]),
             # ── 보고 프로필: 형식 · 채우는 필드 ──
             "profile": {
