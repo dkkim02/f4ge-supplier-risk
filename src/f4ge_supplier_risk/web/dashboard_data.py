@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from f4ge_supplier_risk.generator import aql
 from f4ge_supplier_risk.models import discrepancy
 
 PRD = {"prd_bracket": "브래킷", "prd_shaft": "샤프트", "prd_housing": "하우징", "prd_flange": "플랜지"}
@@ -70,7 +71,13 @@ def build_dashboard(
         span = max((promised - start).total_seconds(), 1.0)
         prog = 1.35 if late else float(min((cut - start).total_seconds() / span, 1.35))
         has_mes = bool(facs.get(o["factory_id"], {}).get("has_mes", False))
+        # 품질 리스크 (2026-09-11, 사용자 결정 ③) — 이 오더의 ISO 2859-1 표본(수준 II)에서 불량이 1개 이상 나올 확률.
+        # 1 − (1 − 유출률)^n. 진짜 확률이라 % 로 읽히고, 결과가 도착하면 맞았는지 확인된다.
+        # 검토 필요 임계는 그대로 유출률 상위 10% 다 — 표본 크기가 수량에 따라 달라 이 값으로 자르면 큰 오더가 유리해진다.
+        n_sample = int(aql.sample_plan(int(o["order_qty"]), 0.025, 0.040)["n"])
+        qrisk = 1.0 - (1.0 - float(s["predicted_escape"])) ** n_sample
         rows.append({
+            "qrisk": round(float(qrisk), 4), "sampleN": n_sample,
             "id": oid, "fac": o["factory_id"], "prd": _prd(o["product_id"]), "mkt": MKT.get(o["market"], o["market"]),
             "qty": o["order_qty"], "ppm": round(float(s["predicted_ppm"])), "risk": s["risk_level"],
             # 제조 품질 — 이 오더의 내부 불량률 추정 (09-08 저녁, 사용자 목표 ①)

@@ -12,6 +12,8 @@
    소스(09-08 저녁): FactoryOS 에 MES · CellOS · ERP · 포지 기록 네 곳이 12곳 전부에서 온다. 연동/미연동 구분 없음.
    공장 차이(09-10): **물리적인 것만** — 무엇을 만드는가 · 제조 능력 · 검출 능력 · 공정 드리프트. 보고 편향·성실도는 통제했다.
    목표 둘(사용자): 제조 품질(내부 불량률 p) · 검수 품질(검출률 d). κ 는 화면에서 뺐다 — 분해해 보인다.
+   2026-09-11 용어(사용자): 「제조 품질 · 불량률 예측 (현시점)」 · 「검수 품질 리스크 · 미검출률 = 100 − 검출률」. 검출률은 2단 κ 에서(d = 1/(1+κ)) 온다.
+   2026-09-11 오후(사용자 결정): 카드 KPI 는 **품질 리스크 하나** = 이 오더 입고검사 표본(ISO 2859-1)에서 불량이 1개 이상 나올 확률 = 1 − (1 − 유출률)^n. 제조/검수 분해는 그 아래 한 줄.
    2026-09-10: 보고 정직도 b 와 불일치는 화면에서 뺐다. b 는 통제 세계에서 항상 1.0 이고, 불일치 축은 검토 필요에서 제거됐다. */
 :root{
   --page:#f9f9f9; --card:#fff; --line:#eff0f6; --line-2:#e4e5e7;
@@ -166,7 +168,9 @@ td .why{white-space:normal;line-height:17px;min-width:120px}
 .ev.report .dot{background:var(--accent)}.ev.missing .dot{background:none;border:1.5px dashed var(--faint)}
 .ev.fai .dot{background:#7c5cff}.ev.label .dot{background:var(--text)}.ev.ship .dot{background:#9098a3}.ev.order .dot{background:#c9d0d8}.ev.score .dot{background:var(--good)}
 .ev.erp_missing .dot{background:none;border:1.5px dashed #8a6cf5}
-.fac .kpis{grid-template-columns:1fr 1fr 1fr}
+.fac .kpis{grid-template-columns:1fr}
+.fac .kpi.main .v{font:700 28px/32px var(--sans);font-variant-numeric:tabular-nums}
+.fac .kpi.main .d{font-size:11px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
 .qbar{position:relative;height:6px;border-radius:999px;background:var(--line);margin:6px 0 4px}
 .qbar b{position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;background:var(--accent);transform:translateX(-6px)}
 .qbar i{position:absolute;top:-3px;width:1px;height:12px;background:var(--faint)}
@@ -368,9 +372,8 @@ document.getElementById("navQueue").onclick = () => go("queue");
         <div class="due"><span>납기 <span class="mono">${cur.promised.slice(5)}</span></span>${bar(cur.prog)}${progText(cur)}</div>
       </div>` : `<div class="cur none">생산 중 오더 없음${done.length ? `<br><span class="sub">마지막 완료 ${oid(done[0])} · ${done[0].lotRej ? "로트 불합격" : "로트 합격"}</span>` : ""}</div>`}
       <div class="kpis">
-        <div class="kpi ${cur ? "" : "zero"}"><div class="v">${cur ? pct(cur.internal) : "—"}</div><div class="l">제조 품질 · 내부 불량률</div></div>
-        <div class="kpi"><div class="v">${pct(f.detection)}</div><div class="l">검수 품질 · 검출률</div></div>
-        <div class="kpi ${cur ? "" : "zero"}"><div class="v">${cur ? fmt(cur.ppm) : "—"}<small>PPM</small></div><div class="l">예상 유출${cur ? " · " + RISK[cur.risk] : ""}</div></div>
+        <div class="kpi main ${cur ? "" : "zero"}"><div class="v">${cur ? pct(cur.qrisk, 0) : "—"}</div><div class="l">품질 리스크 · 입고검사에서 불량이 나올 확률${cur ? " · " + RISK[cur.risk] : ""}</div>
+          <div class="d">${cur ? `제조 불량률 예측 ${pct(cur.internal)} · 미검출률 ${pct(1 - f.detection)} · 예상 유출 ${fmt(cur.ppm)} PPM · 표본 ${cur.sampleN}개` : `미검출률 ${pct(1 - f.detection)} · 공장 중앙 ${fmt(f.ppmMed)} PPM`}</div></div>
       </div>
       ${spark(mine, cur)}
       <div class="ft">
@@ -391,7 +394,8 @@ document.getElementById("navQueue").onclick = () => go("queue");
     { h: "공장", f: r => `<span class="rowlink" data-fac="${r.fac}">${facName(r.fac)}</span>` },
     { h: "상태", f: stChip },
     { h: "위험", f: r => riskChip(r.risk) },
-    { h: "내부 불량률", n: 1, f: r => `<span class="mono">${pct(r.internal)}</span>` },
+    { h: "품질 리스크", n: 1, f: r => `<b class="mono" style="font-weight:500">${pct(r.qrisk, 0)}</b>` },
+    { h: "제조 불량률 예측", n: 1, f: r => `<span class="mono">${pct(r.internal)}</span>` },
     { h: "예상 유출", n: 1, f: r => `<b class="mono" style="font-weight:500">${fmt(r.ppm)}</b> <span class="sub">PPM</span>` },
     { h: "납기", n: 1, f: r => `<span class="mono">${r.promised.slice(5)}</span>` },
     { h: "진척", n: 1, f: progText },
@@ -428,9 +432,9 @@ function renderFac(id) {
   const tot = Math.max(Object.values(cnt).reduce((a, b) => a + b, 0), 1);
   document.getElementById("cPred").innerHTML = `
     <div class="card-h"><div class="card-t">품질예측</div><div class="card-s">예상 유출 불량 · 고객에게 도달하는 값</div></div>
-    ${cur ? `<div class="big">${fmt(cur.ppm)}<small>PPM · 현재 오더 예상 유출</small></div><div style="margin:4px 0 6px">${riskChip(cur.risk)} <span class="sub">통상 고객 기대 1,000 PPM 이하</span></div>`
+    ${cur ? `<div class="big">${pct(cur.qrisk, 0)}<small>품질 리스크 · 현재 오더 입고검사(표본 ${cur.sampleN}개)에서 불량이 나올 확률</small></div><div style="margin:4px 0 6px">${riskChip(cur.risk)} <span class="sub">예상 유출 <span class="mono">${fmt(cur.ppm)}</span> PPM · 통상 고객 기대 1,000 PPM 이하</span></div>`
           : `<div class="big" style="color:var(--faint)">—<small>현재 오더 없음</small></div>`}
-    <div class="kv"><span class="k">현재 오더 내부 불량률 (제조 품질)</span><span class="v">${cur ? pct(cur.internal, 2) : dash}</span></div>
+    <div class="kv"><span class="k">현재 오더 제조 품질 · 불량률 예측 (현시점)</span><span class="v">${cur ? pct(cur.internal, 2) : dash}</span></div>
     <div class="kv"><span class="k">이 공장 중앙 · p90</span><span class="v"><span class="mono">${fmt(f.ppmMed)}</span> · <span class="mono">${fmt(f.ppmP90)}</span> PPM</span></div>
     <div class="tiers" title="채점 구간 오더의 위험 등급 분포">${TIERS.map(t => `<i class="${t}" style="width:${cnt[t] / tot * 100}%"></i>`).join("")}</div>
     <div class="legend">${TIERS.map(t => `<span><i class="${t}" style="background:var(--risk-${t}-tx)"></i>${RISK[t]} ${cnt[t]}</span>`).join("")}</div>
@@ -444,10 +448,10 @@ function renderFac(id) {
   const nF = (pf.fieldsMes || []).length + (pf.fieldsErp || []).length, mF = (pf.fieldsMesAll || []).length + (pf.fieldsErpAll || []).length;
   document.getElementById("cKey").innerHTML = `
     <div class="card-h"><div class="card-t">제조 · 검수 · 보고</div><div class="card-s">입고검사 ${f.paramObs}건으로 추정</div></div>
-    <div class="big">${pct(f.internal, 2)}<small>내부 불량률 · 제조 품질</small></div>
+    <div class="big">${pct(f.internal, 2)}<small>제조 품질 · 불량률 예측 (공장 수준)</small></div>
     ${gauge(f.internal, PP.p ?? f.internal, 0, Math.max(0.12, (PP.p || 0.04) * 3))}
     <div class="sub">세로선 = 12곳 평균 ${pct(PP.p, 2)} · 오른쪽일수록 공장 안에서 불량이 많이 난다</div>
-    <div class="kv" style="margin-top:10px"><span class="k">검수 품질 · 검출률</span><span class="v">${pct(f.detection)} <span class="sub">평균 ${pct(PP.d)}</span></span></div>
+    <div class="kv" style="margin-top:10px"><span class="k">검수 품질 리스크 · 미검출률</span><span class="v">${pct(1 - f.detection)} <span class="sub">검출률 ${pct(f.detection)} · 12곳 평균 미검출 ${pct(1 - PP.d)}</span></span></div>
     <div class="kv"><span class="k">보고 형식</span><span class="v" style="font-weight:400">${PERIOD[pf.period] || "—"} · ${pf.unit === "lot" ? `로트 ${pf.lotSize}개 단위` : "개 단위"} · ${pf.codeScheme === "local" ? "자체 불량코드" : "표준 불량코드"}</span></div>
     <div class="kv"><span class="k">채우는 선택 필드</span><span class="v">${nF}/${mF} <span class="sub">MES ${(pf.fieldsMes || []).length}/${(pf.fieldsMesAll || []).length} · ERP ${(pf.fieldsErp || []).length}/${(pf.fieldsErpAll || []).length}</span></span></div>
     <div class="kv"><span class="k">초도품 검사(FAI) 제출률</span><span class="v">${(f.faiRate * 100).toFixed(0)}%</span></div>
@@ -457,18 +461,18 @@ function renderFac(id) {
   const pInt = cur ? cur.internal : f.internal, dF = f.detection, decomp = pInt * (1 - dF) * 1e6;
   const outPpm = cur ? cur.ppm : f.ppmMed, outLabel = cur ? `현재 오더 ${oid(cur)}` : "공장 중앙";
   const repCur = cur && cur.rep != null ? cur.rep : null;
-  document.getElementById("whySub").textContent = "유출 = 공장 안에서 난 불량 × 검수가 놓친 비율";
+  document.getElementById("whySub").textContent = "유출 = 제조 품질 불량률 × 검수 품질 리스크(미검출률)";
   document.getElementById("why").innerHTML = `<div class="formula">
-      <div class="fbox"><div class="fl">① 제조 품질 — 내부 불량률${cur ? " (현재 오더)" : " (공장)"}</div><div class="fv">${pct(pInt, 2)}</div><div class="fd">${repCur != null ? `MES 보고 ${pct(repCur, 2)} 을 공장 수준으로 당긴 값` : "ERP·Cell 물리 폐기와 우리 입고검사로 잡은 공장 수준"}</div></div>
+      <div class="fbox"><div class="fl">① 제조 품질 · 불량률 예측${cur ? " (현시점 · 현재 오더)" : " (공장 수준)"}</div><div class="fv">${pct(pInt, 2)}</div><div class="fd">${repCur != null ? `MES 보고 ${pct(repCur, 2)} 을 공장 수준으로 당긴 값` : "ERP·Cell 물리 폐기와 우리 입고검사로 잡은 공장 수준"}</div></div>
       <div class="fop">×</div>
-      <div class="fbox"><div class="fl">② 검수가 놓치는 비율 = 1 − 검출률</div><div class="fv">${pct(1 - dF, 2)}</div><div class="fd">검출률 ${pct(dF)} · 12곳 평균 ${pct(PP.d)} · 입고검사 ${f.paramObs}건으로 추정</div></div>
+      <div class="fbox"><div class="fl">② 검수 품질 리스크 · 미검출률 = 100 − 검출률</div><div class="fv">${pct(1 - dF, 2)}</div><div class="fd">검출률 ${pct(dF)} · 12곳 평균 미검출 ${pct(1 - PP.d)} · 입고검사 ${f.paramObs}건으로 추정</div></div>
       <div class="fop">=</div>
-      <div class="fbox out"><div class="fl">예상 유출 불량 · ${outLabel}</div><div class="fv">${fmt(outPpm)} PPM</div><div class="fd">고객에게 도달하는 값 (2단 모델). 분해식 그대로 곱하면 ${fmt(decomp)} PPM</div></div>
+      <div class="fbox out"><div class="fl">예상 유출 불량 · ${outLabel}</div><div class="fv">${fmt(outPpm)} PPM</div><div class="fd">${cur ? `품질 리스크 ${pct(cur.qrisk, 0)} = 표본 ${cur.sampleN}개에서 불량 1개 이상 나올 확률 · ` : ""}분해식 그대로 곱하면 ${fmt(decomp)} PPM</div></div>
     </div>`;
   document.getElementById("whyNote").innerHTML =
     `<b>제조 품질</b>은 ERP 자재 소진 − Cell 카운터로 나온 <b>물리적 폐기</b>를 폐기 비중${D.params?.scrapShare ? `(${pct(D.params.scrapShare, 1)}, 중앙 공장의 보고를 정직으로 두고 데이터에서 뽑은 값)` : ""}으로 되돌려 잡은 불량을 추정하고, 우리 입고검사가 잡은 유출을 더한 값이다.
-     <b>검수 품질</b>은 그 잡은 불량 ÷ (잡은 + 유출).
-     유출 라벨이 희소해 검출률의 공장 간 순위 정밀도는 낮다(합성 검증 ρ 0.49). 제조 품질 순위는 높다(오더 ρ 0.92).`;
+     <b>검수 품질 리스크</b>는 100 − 검출률. 검출률은 2단 모델의 공장별 보정 상수에서 낸다(d = 1/(1+κ)) — 우리 입고검사가 그 공장에서 찾은 불량을 보고대로의 노출과 비교한 값이고, 관측이 적은 공장은 12곳 평균 쪽으로 당긴다.
+     유출 라벨이 희소해 검출률의 공장 간 순위 정밀도는 낮다(합성 검증 ρ 0.53). 제조 품질 순위는 높다(오더 ρ 0.92).`;
 
   /* 하단 좌 ② 이상의 근거 — 현재 오더 하나 */
   const evEl = document.getElementById("ev"), RT = D.reasonText || {};
@@ -498,7 +502,7 @@ function renderFac(id) {
   tbl("tHist", [
     { h: "오더", f: r => `<b style="font-weight:500">${oid(r)}</b> <span class="sub">${r.orderedAt.slice(5)} 발주</span>` },
     { h: "상태", f: stChip },
-    { h: "예측", n: 1, f: r => `<span class="mono">${fmt(r.ppm)}</span> <span class="sub">PPM</span>` },
+    { h: "품질 리스크", n: 1, f: r => `<span class="mono">${pct(r.qrisk, 0)}</span> <span class="sub">${fmt(r.ppm)} PPM</span>` },
     { h: "위험", f: r => riskChip(r.risk) },
     { h: "권고했던 것", f: r => actChip(r.act) },
     { h: "실제 결과", f: r => !r.late ? `<span class="sub">입고검사 대기</span>` : `<span class="mono">${r.insp}개 중 ${r.rej}</span> · ${r.lotRej ? `<span class="chip risk critical">로트 불합격</span>` : `<span class="chip st">로트 합격</span>`}` },
