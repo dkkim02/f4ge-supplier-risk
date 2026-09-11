@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
+from scipy.stats import gamma as _gamma
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
@@ -38,6 +39,17 @@ _SHRINK_PSEUDO = 150.0
 # kappa 사전분포. 이력 없는 공장은 전체 평균 kappa 쪽으로 당겨진다(partial pooling).
 _KAPPA_PRIOR_STRENGTH = 3.0
 _FLOOR = 1e-7
+
+
+def detection_rate(kappa):
+    """kappa -> 공장 검출률 d.  `d = 1 / (1 + kappa)`  (2026-09-11, [[모델_방향_결정]] §3 ①).
+
+    kappa = (1 - d) / (d x b) 인데 보고 편향 b 를 통제해 b = 1 이 되면서 kappa = (1 - d) / d 가 됐다.
+    **표기 변환이고 값이 같다** — 모델이 추정하는 것은 여전히 kappa 하나다.
+    `kappa 0.0441` 은 뜻이 없고 `검출률 95.8%` 는 계약서에 쓸 수 있다.
+    스칼라 · numpy 배열 · 사후표본 어느 것이든 그대로 받는다(단조 감소라 분위수 순서만 뒤집힌다).
+    """
+    return 1.0 / (1.0 + kappa)
 
 
 def _dt(s: str) -> datetime:
@@ -101,11 +113,20 @@ def explain(
     """
     internal_train = _stage_a(train, train, cols)
     post, pooled = _kappa_by_factory(train, internal_train)
+    kappa = {fid: a / b for fid, (a, b) in post.items()}
+    # Gamma(a, rate b) 사후분포의 κ 분위수 → d 구간. d 는 κ 의 단조 감소라 q05(d) 는 κ 의 q95 에서 온다.
+    # conjugate 라 표본 없이 닫힌 형태로 나온다 — hier_bayes.posterior() 의 detection_q05/q95 와 같은 자리 (§3 ③ 재료).
+    q = {fid: _gamma(a, scale=1.0 / b).ppf([0.95, 0.05]) for fid, (a, b) in post.items()}
     return {
         "internal_hat": _stage_a(train, test, cols),
-        "kappa": {fid: a / b for fid, (a, b) in post.items()},
+        "kappa": kappa,
         "kappa_pooled": pooled,
         "kappa_obs": {fid: int(a - _KAPPA_PRIOR_STRENGTH) for fid, (a, _) in post.items()},
+        # 같은 값을 검출률로 — 화면·계약이 읽는 표기 (§3 ①)
+        "detection": {fid: float(detection_rate(k)) for fid, k in kappa.items()},
+        "detection_pooled": float(detection_rate(pooled)),
+        "detection_q05": {fid: float(detection_rate(hi)) for fid, (hi, _) in q.items()},
+        "detection_q95": {fid: float(detection_rate(lo)) for fid, (_, lo) in q.items()},
     }
 
 

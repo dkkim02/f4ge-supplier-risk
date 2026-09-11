@@ -44,11 +44,11 @@ def main() -> None:
     df = build(data)
     tr, te = split_by_time(df)
     pred_tr, pred = _predict(tr, tr), _predict(tr, te)
+    ex = two_stage.explain(tr, te, LAYERS["L0+Cell+MES+ERP"])
     scored = build_scores(
         tr, pred_tr, discrepancy.fit_predict(tr, tr),
-        te, pred, discrepancy.fit_predict(tr, te), discrepancy.reasons(tr, te),
+        te, pred, discrepancy.fit_predict(tr, te), discrepancy.reasons(tr, te), explain=ex,
     )
-    ex = two_stage.explain(tr, te, LAYERS["L0+Cell+MES+ERP"])
     ex["params_pooled"] = factory_params.estimate(tr).attrs["pooled"]
     trust_low = set(scored.loc[scored["factory_trust_low"].astype(bool), "factory_id"])
 

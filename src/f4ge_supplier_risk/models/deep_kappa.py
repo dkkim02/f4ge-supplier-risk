@@ -115,6 +115,34 @@ def fit_predict(
 
     `cols` 는 **비워 두는 것이 기본**이다 — 오더 수준 피처를 넣으면 나빠진다(위 docstring).
     """
+    return _fit(train, test, cols, seed, mode, hidden, epochs, wd, a0)[0]
+
+
+def explain(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    seed: int = 0,
+    mode: str = "hier",
+    hidden: int = 8,
+    epochs: int = 800,
+    wd: float = 1e-3,
+    a0: float | None = None,
+) -> dict[str, object]:
+    """공장별 kappa 와 검출률 d = 1/(1+κ) (§3 ①). `two_stage.explain` 의 `kappa` · `detection` 과 같은 모양.
+
+    오더 수준 피처(`cols`)가 없을 때 g(·) 는 공장의 함수라 공장당 값 하나가 정해진다.
+    학습에서 못 본 공장(채점 프레임에만 있는 공장)은 예측과 같은 규칙으로 — `feat`·`hier` 는
+    f(특성), `embed` 는 pooled — 떨어진다.
+    """
+    _, kappa = _fit(train, test, (), seed, mode, hidden, epochs, wd, a0)
+    return {
+        "kappa": kappa,
+        "detection": {f: float(two_stage.detection_rate(k)) for f, k in kappa.items()},
+    }
+
+
+def _fit(train, test, cols, seed, mode, hidden, epochs, wd, a0):
+    """학습 + 채점. `(오더별 예측, 공장별 kappa)`. 공장별 kappa 는 `cols` 가 비어 있을 때만 정의된다."""
     if not _TORCH:
         raise RuntimeError("torch 없음")
     torch.manual_seed(seed)
@@ -195,7 +223,20 @@ def fit_predict(
             r = res.detach().numpy()[idx_te.numpy()]
             lg = lg + np.where(seen_te, r, 0.0)   # 처음 보는 공장은 f(특성) 그대로
         out = np.exp(lg)
-    return np.clip(out, _FLOOR, 1 - 1e-6)
+
+        # 공장별 kappa — 공장 하나를 행 하나로 둔 설계행렬에 같은 g(·) 를 적용한다.
+        # 학습 + 채점 프레임에 나오는 공장 전부. 잔차는 학습에서 본 공장에만 있다.
+        kappa: dict[str, float] = {}
+        if not cols:
+            all_fac = sorted(set(tr["factory_id"]) | set(te["factory_id"]))
+            fac_frame = pd.DataFrame({"factory_id": all_fac, "_ih": 1.0})
+            Xf, _ = _design(fac_frame, (), fmode, fac_index, fac_tab, norm)
+            g = net(torch.tensor(Xf, dtype=torch.float32)).squeeze(-1).numpy()
+            if mode == "hier":
+                rf = res.detach().numpy()
+                g = g + np.array([rf[pos[f]] if f in pos else 0.0 for f in all_fac])
+            kappa = {f: float(np.exp(v)) for f, v in zip(all_fac, g, strict=True)}
+    return np.clip(out, _FLOOR, 1 - 1e-6), kappa
 
 
 def _cols_for_stage_a():

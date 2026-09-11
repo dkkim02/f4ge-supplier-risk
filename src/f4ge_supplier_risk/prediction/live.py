@@ -56,9 +56,9 @@ def score_from_db(eng: Engine, now: datetime | None = None, note: str = "") -> d
 
     pred_tr, pred = _predict(train, train), _predict(train, test)
     disc_tr, disc = discrepancy.fit_predict(train, train), discrepancy.fit_predict(train, test)
-    scored = build_scores(train, pred_tr, disc_tr, test, pred, disc, discrepancy.reasons(train, test))
-    scored["scored_at"] = now_s
     explain = two_stage.explain(train, test, LAYERS["L0+Cell+MES+ERP"])
+    scored = build_scores(train, pred_tr, disc_tr, test, pred, disc, discrepancy.reasons(train, test), explain=explain)
+    scored["scored_at"] = now_s
     params = factory_params.estimate(train)
     explain["params_pooled"] = params.attrs["pooled"]
     explain["scrap_share"] = params.attrs["scrap_share"]

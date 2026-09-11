@@ -144,8 +144,9 @@ def posterior(
     warmup: int = 1000,
     samples: int = 1000,
 ) -> dict[str, object]:
-    """사후분포 요약 — 공장별 kappa 의 구간, tau, divergence 수.
+    """사후분포 요약 — 공장별 kappa 와 검출률 d 의 90% 구간, tau, divergence 수.
 
+    `detection_*` 는 `d = 1/(1+κ)` 를 사후표본마다 적용한 것이다(§3 ①). 검출률 칸에 구간을 넣을 재료.
     `tau` 가 이 모델의 요점이다. conjugate 의 `a0 = 3.0` 에 해당하는 값을 **추정한 것**이라,
     손으로 박은 값이 데이터와 맞았는지 여기서 처음 확인된다.
     """
@@ -164,6 +165,9 @@ def posterior(
         "kappa_mean": {f: float(kap[:, i].mean()) for i, f in enumerate(fac_index)},
         "kappa_q05": {f: float(np.quantile(kap[:, i], 0.05)) for i, f in enumerate(fac_index)},
         "kappa_q95": {f: float(np.quantile(kap[:, i], 0.95)) for i, f in enumerate(fac_index)},
+        "detection_mean": {f: float(det[:, i].mean()) for i, f in enumerate(fac_index)},
+        "detection_q05": {f: float(np.quantile(det[:, i], 0.05)) for i, f in enumerate(fac_index)},
+        "detection_q95": {f: float(np.quantile(det[:, i], 0.95)) for i, f in enumerate(fac_index)},
         "n_events": int(lab["y_reject"].sum()),
         "n_labeled_orders": len(lab),
     }

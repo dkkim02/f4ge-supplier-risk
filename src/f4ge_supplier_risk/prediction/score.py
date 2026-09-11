@@ -34,7 +34,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from f4ge_supplier_risk.features.build import FULL_COLS
 from f4ge_supplier_risk.models import factory_params as fp
+from f4ge_supplier_risk.models import two_stage
 from f4ge_supplier_risk.models.discrepancy import NO_EVIDENCE, REASONS
 
 _REASON_TEXT = {code: (txt, chk) for code, _, txt, chk in REASONS}
@@ -78,20 +80,28 @@ def build_scores(
     disc: np.ndarray,
     reasons: pd.DataFrame | None = None,
     params: pd.DataFrame | None = None,
+    explain: dict[str, object] | None = None,
 ) -> pd.DataFrame:
     """`supplier-risk-score.v1` 모양의 행들.
 
     공장 신뢰도는 **학습 구간에서만** 계산한다 — 테스트 오더를 채점하는 시점에
     그 오더의 결과는 아직 없다.
-    `params` = 공장 파라미터 분해(제조 품질 p · 검수 품질 d · 보고 정직도 b, models/factory_params.py).
-    없으면 학습 구간에서 계산한다.
+    `params` = 공장 파라미터 분해(제조 품질 p · 물리 폐기 기반, models/factory_params.py). 없으면 학습 구간에서 계산한다.
+    `explain` = `two_stage.explain(train, test, FULL_COLS)` 결과. 없으면 여기서 계산한다.
+
+    **검수 품질 d 는 2026-09-11 부터 2단 모델의 κ 에서 온다** — `d = 1/(1+κ)` ([[모델_방향_결정]] §3 ①).
+    분해식 `params["d"]` 와 값이 같은 것(절대오차 중앙 0.007)을 진실 대비로 확인했고, 진실과는 κ 쪽이 조금 더
+    맞는다(ρ +0.531 vs +0.492 · 절대오차 0.0091 vs 0.0103, 8 seed, docs/_검출률_재파라미터화.md).
+    유출 예측이 `ih × κ` 이므로 이제 `유출 = p × (1 − d)` 의 d 가 예측과 같은 값이다.
     """
     if params is None:
         params = fp.estimate(train)
+    if explain is None:
+        explain = two_stage.explain(train, test, FULL_COLS)
     internal = fp.order_internal_rate(test, params)
     pooled = params.attrs.get("pooled", {})
     fac = test["factory_id"]
-    d_f = fac.map(params["d"]).fillna(pooled.get("d", np.nan)).to_numpy(float)
+    d_f = fac.map(explain["detection"]).fillna(explain["detection_pooled"]).to_numpy(float)
     p_f = fac.map(params["p"]).fillna(pooled.get("p", np.nan)).to_numpy(float)
     obs_f = fac.map(params["n_labels"]).fillna(0).to_numpy(int)
     risk_cuts = np.quantile(train_pred, _RISK_Q)
