@@ -71,6 +71,23 @@ def test_contract_detection_comes_from_kappa(table):
     assert np.allclose(scored["factory_detection_rate"].to_numpy(float), np.round(want, 4))
 
 
+@pytest.mark.skipif(not hier_bayes.available(), reason="numpyro 없음")
+def test_multi_head_keeps_structure(table):
+    """multi-head (§3 ②) — 세 값이 한 모델에서 나와 `유출 = p × (1 − d)` 가 구조적으로 성립한다.
+
+    escape = c κ, internal = c (1 + κ), d = 1/(1+κ)  ⇒  escape = internal × (1 − d) 가 항등식이어야 한다.
+    완료 시점 학습이면 gamma_f ≈ 1 이라 유출은 pool 과 같은 자리에 있어야 한다.
+    """
+    tr, te = split_by_time(table)
+    m = hier_bayes.fit_predict_multi(tr, te, warmup=200, samples=200)
+    d = te["factory_id"].map(m["detection"]).to_numpy(float)
+    assert np.allclose(m["escape"], np.clip(m["internal"] * (1.0 - d), 1e-7, 1 - 1e-6), rtol=1e-5)  # jax float32
+    assert np.all((m["scrap_rate"] > 0) & (m["scrap_rate"] < 1))
+    assert set(m["gamma"]) == set(m["detection"]) == set(m["s"])
+    assert all(0.7 < g < 1.4 for g in m["gamma"].values()), "완료 시점인데 gamma_f 가 1 에서 멀다"
+    assert m["n_scrap_events"] > 100
+
+
 def test_two_stage_detection_interval_brackets_mean(table):
     """conjugate Gamma 사후분포에서 낸 d 90% 구간 — q05 ≤ d ≤ q95.
 
