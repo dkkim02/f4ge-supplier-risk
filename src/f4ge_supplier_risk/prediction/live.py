@@ -67,5 +67,6 @@ def score_from_db(eng: Engine, now: datetime | None = None, note: str = "") -> d
     score_rows = [to_contract(r) for _, r in scored.iterrows()]
     run_id = now.strftime("%Y%m%dT%H%M%S") + "_" + secrets.token_hex(3)
     db.save_run(eng, run_id, score_rows, dash, n_train=len(train), note=note)
+    db.save_profile(eng, run_id, now_s, explain)   # 공장별 d 축적 (§3 ③)
     acts = scored["recommended_action"].value_counts().to_dict()
     return {"run_id": run_id, "scored_at": now_s, "n_train": len(train), "n_scored": len(test), "actions": acts}

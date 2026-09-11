@@ -79,6 +79,20 @@ scores = sa.Table(
     sa.Column("factory_id", sa.String(64), nullable=False, index=True),
     sa.Column("payload", sa.Text, nullable=False),  # supplier-risk-score.v1 행
 )
+# 공장 프로필 — run 마다 공장별 검출률 d 와 90% 구간을 쌓는다 (2026-09-11, [[모델_방향_결정]] §3 ③).
+# 점수 행에도 d 가 있지만 오더 단위라 시계열로 읽기 어렵다. 여기는 (run, 공장) 하나에 행 하나.
+# ⚠ 「검출률이 나아지고 있나」는 표본 ×2 전에는 주장하지 않는다(현행 d 최소 seed +0.007). 저장만 한다.
+factory_profile = sa.Table(
+    "factory_profile", meta,
+    sa.Column("run_id", sa.String(32), nullable=False, index=True),
+    sa.Column("factory_id", sa.String(64), nullable=False, index=True),
+    sa.Column("scored_at", sa.String(32), nullable=False),
+    sa.Column("detection", sa.Float, nullable=False),        # d = 1/(1+κ)
+    sa.Column("detection_q05", sa.Float, nullable=False),    # Gamma 사후분포 90% 구간
+    sa.Column("detection_q95", sa.Float, nullable=False),
+    sa.Column("kappa", sa.Float, nullable=False),
+    sa.Column("n_events", sa.Integer, nullable=False),       # κ 갱신에 쓰인 입고검사 불량 건수
+)
 score_runs = sa.Table(
     "score_runs", meta,
     sa.Column("run_id", sa.String(32), primary_key=True),
@@ -186,3 +200,29 @@ def latest_run(eng: Engine) -> dict[str, Any] | None:
     with eng.connect() as cx:
         r = cx.execute(sa.select(score_runs).order_by(score_runs.c.scored_at.desc()).limit(1)).first()
         return dict(r._mapping) if r else None
+
+
+def save_profile(eng: Engine, run_id: str, scored_at: str, explain: dict[str, Any]) -> int:
+    """`two_stage.explain()` 결과에서 공장별 d 행을 쌓는다. run 하나에 공장 수만큼."""
+    rows = [
+        {"run_id": run_id, "factory_id": fid, "scored_at": scored_at,
+         "detection": float(explain["detection"][fid]),
+         "detection_q05": float(explain["detection_q05"][fid]),
+         "detection_q95": float(explain["detection_q95"][fid]),
+         "kappa": float(explain["kappa"][fid]),
+         "n_events": int(max(explain["kappa_obs"].get(fid, 0), 0))}
+        for fid in explain["detection"]
+    ]
+    if rows:
+        with eng.begin() as cx:
+            cx.execute(factory_profile.insert(), rows)
+    return len(rows)
+
+
+def load_profile(eng: Engine, factory_id: str | None = None) -> list[dict[str, Any]]:
+    """공장별 d 이력 — 시간순."""
+    q = sa.select(factory_profile).order_by(factory_profile.c.scored_at, factory_profile.c.factory_id)
+    if factory_id:
+        q = q.where(factory_profile.c.factory_id == factory_id)
+    with eng.connect() as cx:
+        return [dict(r._mapping) for r in cx.execute(q)]

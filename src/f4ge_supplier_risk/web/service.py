@@ -97,6 +97,12 @@ def create_app(eng: Engine) -> FastAPI:
             rows = [r for r in rows if r["factory_id"] == p.factory_id]
         return {"run_id": run["run_id"], "rows": rows}
 
+    @app.get("/api/factory_profile")
+    def factory_profile(p: auth.Principal = need("admin", "site")):
+        """공장별 검출률 d 이력 — run 마다 한 행. site 는 자기 공장만."""
+        rows = db.load_profile(eng, p.factory_id if p.role == "site" else None)
+        return {"rows": rows}
+
     @app.get("/", include_in_schema=False)
     def index() -> HTMLResponse:
         return HTMLResponse((STATIC / "공장관제.html").read_text().replace("__DATA__", "__LIVE__"))

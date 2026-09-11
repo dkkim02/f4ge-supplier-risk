@@ -72,6 +72,13 @@ def test_score_run_then_dashboard_scoped_by_role(env):
     assert scores and all(s["factory_id"] == env["site_fac"] for s in scores)
     assert set(scores[0]) >= {"schema_version", "predicted_escape_ppm", "recommended_action"}
 
+    # 공장 프로필 — run 마다 공장별 d 한 행씩 쌓인다 (§3 ③). site 는 자기 공장만
+    prof = c.get("/api/factory_profile", headers=_h(env, "admin")).json()["rows"]
+    assert len(prof) == env["n_fac"] and {r["run_id"] for r in prof} == {body["run_id"]}
+    assert all(0 < r["detection_q05"] <= r["detection"] <= r["detection_q95"] < 1 for r in prof)
+    site_prof = c.get("/api/factory_profile", headers=_h(env, "site")).json()["rows"]
+    assert [r["factory_id"] for r in site_prof] == [env["site_fac"]]
+
 
 def test_index_serves_live_page(env):
     html = env["client"].get("/").text
